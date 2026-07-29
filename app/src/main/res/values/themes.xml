@@ -1,0 +1,4 @@
+<resources>
+
+    <style name="Theme.Surfer" parent="Theme.MaterialComponents.Light" />
+</resources>
