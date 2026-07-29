@@ -306,8 +306,21 @@ fun BrowserScreen(
                                                     tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
-                                            IconButton(onClick = { /* Download trigger */ showMenu = false }) {
-                                                Icon(Icons.Rounded.Download, contentDescription = "Download")
+                                            val context = androidx.compose.ui.platform.LocalContext.current
+                                            IconButton(onClick = { 
+                                                webView?.evaluateJavascript("(function() { return document.documentElement.outerHTML; })();") { html ->
+                                                    // Remove extra quotes and escape characters from evaluateJavascript result
+                                                    val cleanedHtml = if (html != null && html.startsWith("\"") && html.endsWith("\"")) {
+                                                        html.substring(1, html.length - 1)
+                                                            .replace("\\u003C", "<")
+                                                            .replace("\\\"", "\"")
+                                                            .replace("\\\\", "\\")
+                                                    } else html ?: ""
+                                                    viewModel.saveHtml(currentTab.title, cleanedHtml, context)
+                                                }
+                                                showMenu = false 
+                                            }) {
+                                                Icon(Icons.Rounded.Download, contentDescription = "Download as HTML")
                                             }
                                             IconButton(onClick = { /* Info trigger */ showMenu = false }) {
                                                 Icon(Icons.Rounded.Info, contentDescription = "Info")

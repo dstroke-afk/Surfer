@@ -1,11 +1,16 @@
 package com.example.surfer
 
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -41,6 +46,28 @@ class MainActivity : ComponentActivity() {
 fun MainApp(intent: Intent?) {
     val backStack = rememberNavBackStack(BrowserRoute)
     val viewModel: BrowserViewModel = viewModel(factory = BrowserViewModel.Factory)
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    DisposableEffect(viewModel) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val action = intent?.action
+                if (DownloadManager.ACTION_DOWNLOAD_COMPLETE == action) {
+                    viewModel.showSnackbar("Download completed")
+                }
+            }
+        }
+        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+        
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
 
     LaunchedEffect(intent) {
         intent?.data?.toString()?.let { url ->

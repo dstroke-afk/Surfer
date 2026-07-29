@@ -239,6 +239,58 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
         }
     }
 
+    fun showSnackbar(message: String) {
+        _snackbarMessage.value = message
+    }
+
+    fun saveHtml(title: String, html: String, context: android.content.Context) {
+        viewModelScope.launch {
+            val fileName = "${title.replace(Regex("[^a-zA-Z0-9]"), "_")}.html"
+            
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val contentValues = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/html")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                }
+
+                val resolver = context.contentResolver
+                val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+                if (uri != null) {
+                    try {
+                        resolver.openOutputStream(uri)?.use { outputStream ->
+                            outputBuffer(html, outputStream)
+                        }
+                        _snackbarMessage.value = "Saved $fileName to Downloads"
+                    } catch (e: Exception) {
+                        _snackbarMessage.value = "Failed to save HTML: ${e.message}"
+                    }
+                } else {
+                    _snackbarMessage.value = "Failed to create file in Downloads"
+                }
+            } else {
+                // Fallback for older Android versions
+                try {
+                    val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                    val file = java.io.File(downloadsDir, fileName)
+                    java.io.FileOutputStream(file).use { outputStream ->
+                        outputBuffer(html, outputStream)
+                    }
+                    _snackbarMessage.value = "Saved $fileName to Downloads"
+                } catch (e: Exception) {
+                    _snackbarMessage.value = "Failed to save HTML: ${e.message}"
+                }
+            }
+        }
+    }
+
+    private fun outputBuffer(content: String, outputStream: java.io.OutputStream) {
+        val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(outputStream))
+        writer.write(content)
+        writer.flush()
+    }
+
     fun toggleDesktopSite() {
         updateCurrentTab { it.copy(isDesktopSite = !it.isDesktopSite) }
     }
