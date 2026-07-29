@@ -25,10 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
@@ -89,6 +90,7 @@ fun BrowserScreen(
     var webView: WebView? by remember { mutableStateOf(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showHistoryBookmarks by remember { mutableStateOf(false) }
+    var showTabSwitcher by remember { mutableStateOf(false) }
     var sslErrorToHandle by remember { mutableStateOf<Pair<SslErrorHandler, SslError>?>(null) }
     val focusManager = LocalFocusManager.current
 
@@ -153,7 +155,7 @@ fun BrowserScreen(
                                     shape = CircleShape,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(40.dp) // Slightly reduced height to fit better
+                                        .height(40.dp)
                                         .padding(horizontal = 4.dp)
                                 ) {
                                     Box(
@@ -225,7 +227,8 @@ fun BrowserScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(48.dp)
-                                        .clickable { /* Tab switcher placeholder */ },
+                                        .clip(CircleShape)
+                                        .clickable { showTabSwitcher = true },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Box(
@@ -237,7 +240,7 @@ fun BrowserScreen(
                                         Text(
                                             text = tabs.size.toString(),
                                             style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
@@ -312,45 +315,6 @@ fun BrowserScreen(
                             trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         )
                     }
-
-                    // Tab Strip for Non-Expanded (Phone)
-                    if (!isExpanded && tabs.size > 1) {
-                        key(tabs.size) {
-                            val safeIndex = if (tabs.isNotEmpty()) selectedTabIndex.coerceAtMost(tabs.size - 1) else 0
-                            ScrollableTabRow(
-                                selectedTabIndex = safeIndex,
-                                edgePadding = 8.dp,
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                divider = {}
-                            ) {
-                                tabs.forEachIndexed { index, tab ->
-                                    Tab(
-                                        selected = safeIndex == index,
-                                        onClick = { viewModel.selectTab(index) },
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = tab.title,
-                                                    maxLines = 1,
-                                                    style = MaterialTheme.typography.labelMedium
-                                                )
-                                                IconButton(
-                                                    onClick = { viewModel.removeTab(index) },
-                                                    modifier = Modifier.size(16.dp)
-                                                ) {
-                                                    Icon(
-                                                        Icons.Rounded.Close,
-                                                        contentDescription = "Close Tab",
-                                                        modifier = Modifier.size(12.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
         ) { padding ->
@@ -405,6 +369,29 @@ fun BrowserScreen(
         }
     }
 
+    if (showTabSwitcher) {
+        ModalBottomSheet(
+            onDismissRequest = { showTabSwitcher = false },
+            modifier = Modifier.fillMaxHeight(0.9f)
+        ) {
+            TabSwitcherContent(
+                tabs = tabs,
+                selectedTabIndex = selectedTabIndex,
+                onTabSelect = { index ->
+                    viewModel.selectTab(index)
+                    showTabSwitcher = false
+                },
+                onTabClose = { index ->
+                    viewModel.removeTab(index)
+                },
+                onNewTab = {
+                    viewModel.addNewTab()
+                    showTabSwitcher = false
+                }
+            )
+        }
+    }
+
     sslErrorToHandle?.let { (handler, error) ->
         AlertDialog(
             onDismissRequest = { 
@@ -431,6 +418,124 @@ fun BrowserScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun TabSwitcherContent(
+    tabs: List<BrowserTabState>,
+    selectedTabIndex: Int,
+    onTabSelect: (Int) -> Unit,
+    onTabClose: (Int) -> Unit,
+    onNewTab: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${tabs.size} Tabs",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = onNewTab) {
+                Icon(Icons.Rounded.Add, contentDescription = "New Tab")
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            itemsIndexed(tabs) { index, tab ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(0.8f)
+                        .border(
+                            width = if (index == selectedTabIndex) 2.dp else 0.dp,
+                            color = if (index == selectedTabIndex) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            shape = MaterialTheme.shapes.medium
+                        )
+                        .clickable { onTabSelect(index) },
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = tab.title,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { onTabClose(index) },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = "Close Tab",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        Text(
+                            text = tab.url,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Mini window placeholder
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .background(
+                                    MaterialTheme.colorScheme.surface,
+                                    MaterialTheme.shapes.small
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.Web,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -590,7 +695,8 @@ fun HomePage(
         }
     }
 }
-    @Composable
+
+@Composable
 fun HistoryBookmarksContent(
     history: List<com.example.surfer.data.HistoryEntity>,
     bookmarks: List<com.example.surfer.data.BookmarkEntity>,
