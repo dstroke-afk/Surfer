@@ -1,17 +1,11 @@
 package com.example.surfer.ui
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.webkit.WebView
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.surfer.data.BookmarkEntity
 import com.example.surfer.data.BrowserDatabase
@@ -19,6 +13,7 @@ import com.example.surfer.data.BrowserRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() {
@@ -27,6 +22,9 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
 
     val currentTab: StateFlow<BrowserTabState?> = _state.map { it.currentTab }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BrowserTabState())
+    
+    // Derived state for groups and top-level tabs
+    val groups = _state.map { it.groups }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val history = repository.allHistory.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val bookmarks = repository.allBookmarks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -50,7 +48,18 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
     fun removeTab(index: Int) {
         _state.update { currentState ->
             if (currentState.tabs.size > 1) {
+                val tabToRemove = currentState.tabs[index]
                 val newTabs = currentState.tabs.toMutableList().apply { removeAt(index) }
+                
+                // Cleanup groups if necessary
+                val newGroups = if (tabToRemove.groupId != null) {
+                    currentState.groups.map { group ->
+                        if (group.id == tabToRemove.groupId) {
+                            group.copy(tabIds = group.tabIds.filter { it != tabToRemove.id })
+                        } else group
+                    }.filter { it.tabIds.isNotEmpty() }
+                } else currentState.groups
+
                 val newIndex = if (currentState.selectedTabIndex >= newTabs.size) {
                     newTabs.lastIndex
                 } else {
@@ -58,7 +67,8 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
                 }
                 currentState.copy(
                     tabs = newTabs,
-                    selectedTabIndex = newIndex
+                    selectedTabIndex = newIndex,
+                    groups = newGroups
                 )
             } else {
                 currentState
@@ -95,6 +105,63 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
             } else {
                 currentState
             }
+        }
+    }
+
+    fun captureSnapshot(webView: WebView) {
+        val width = webView.width
+        val height = webView.height
+        if (width <= 0 || height <= 0) return
+        
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        webView.draw(canvas)
+        
+        // Scale down for thumbnail
+        val thumbnail = Bitmap.createScaledBitmap(bitmap, width / 4, height / 4, true)
+        
+        updateCurrentTab { it.copy(thumbnail = thumbnail) }
+    }
+
+    fun mergeTabs(draggedTabId: String, targetTabId: String) {
+        _state.update { currentState ->
+            val draggedTab = currentState.tabs.find { it.id == draggedTabId } ?: return@update currentState
+            val targetTab = currentState.tabs.find { it.id == targetTabId } ?: return@update currentState
+            
+            if (draggedTab.id == targetTab.id) return@update currentState
+
+            val newGroups = currentState.groups.toMutableList()
+            val newTabs = currentState.tabs.map { it.copy() }.toMutableList()
+
+            val targetGroupId = targetTab.groupId
+            val finalGroupId = targetGroupId ?: UUID.randomUUID().toString()
+
+            if (targetGroupId == null) {
+                // Create new group
+                newGroups.add(TabGroup(finalGroupId, "New Group", listOf(targetTab.id, draggedTab.id)))
+                // Update target tab
+                val targetIndex = newTabs.indexOfFirst { it.id == targetTab.id }
+                newTabs[targetIndex] = newTabs[targetIndex].copy(groupId = finalGroupId)
+            } else {
+                // Add to existing group
+                val groupIndex = newGroups.indexOfFirst { it.id == targetGroupId }
+                newGroups[groupIndex] = newGroups[groupIndex].copy(tabIds = (newGroups[groupIndex].tabIds + draggedTab.id).distinct())
+            }
+
+            // Update dragged tab
+            val draggedIndex = newTabs.indexOfFirst { it.id == draggedTab.id }
+            newTabs[draggedIndex] = newTabs[draggedIndex].copy(groupId = finalGroupId)
+
+            currentState.copy(tabs = newTabs, groups = newGroups)
+        }
+    }
+
+    fun renameGroup(groupId: String, newName: String) {
+        _state.update { currentState ->
+            val newGroups = currentState.groups.map { 
+                if (it.id == groupId) it.copy(name = newName) else it
+            }
+            currentState.copy(groups = newGroups)
         }
     }
 

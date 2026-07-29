@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.BasicTextField
@@ -52,6 +53,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.material.icons.rounded.Tab
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.ui.zIndex
 import com.example.surfer.ui.theme.SurferTheme
 
 @Preview(showBackground = true, device = "spec:width=411dp,height=891dp,navigation=buttons")
@@ -263,9 +277,81 @@ fun BrowserScreen(
                                     }
                                 }
 
-                                // Menu button
-                                IconButton(onClick = { showMenu = true }) {
-                                    Icon(Icons.Rounded.MoreVert, contentDescription = "Menu")
+                                // Menu button (Restored to top right)
+                                Box {
+                                    IconButton(onClick = { showMenu = true }) {
+                                        Icon(Icons.Rounded.MoreVert, contentDescription = "Menu")
+                                    }
+                                    
+                                    DropdownMenu(
+                                        expanded = showMenu,
+                                        onDismissRequest = { showMenu = false },
+                                        modifier = Modifier.width(280.dp)
+                                    ) {
+                                        // Top Row of Icons
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            IconButton(onClick = { webView?.goBack(); showMenu = false }, enabled = canGoBack) {
+                                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                                            }
+                                            IconButton(onClick = { viewModel.toggleBookmark(); showMenu = false }) {
+                                                Icon(
+                                                    if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                                    contentDescription = "Bookmark",
+                                                    tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                            IconButton(onClick = { /* Download trigger */ showMenu = false }) {
+                                                Icon(Icons.Rounded.Download, contentDescription = "Download")
+                                            }
+                                            IconButton(onClick = { /* Info trigger */ showMenu = false }) {
+                                                Icon(Icons.Rounded.Info, contentDescription = "Info")
+                                            }
+                                            IconButton(onClick = { webView?.reload(); showMenu = false }) {
+                                                Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
+                                            }
+                                        }
+                                        
+                                        HorizontalDivider()
+                                        
+                                        DropdownMenuItem(
+                                            text = { Text("History & Bookmarks") },
+                                            onClick = {
+                                                showHistoryBookmarks = true
+                                                showMenu = false
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Rounded.History, contentDescription = null)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Desktop Site") },
+                                            onClick = {
+                                                viewModel.toggleDesktopSite()
+                                                showMenu = false
+                                            },
+                                            trailingIcon = {
+                                                Checkbox(
+                                                    checked = currentTab.isDesktopSite,
+                                                    onCheckedChange = null
+                                                )
+                                            }
+                                        )
+                                        HorizontalDivider()
+                                        DropdownMenuItem(
+                                            text = { Text("Refresh") },
+                                            onClick = {
+                                                webView?.reload()
+                                                showMenu = false
+                                            },
+                                            leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
+                                        )
+                                    }
                                 }
                             }
                         },
@@ -274,76 +360,6 @@ fun BrowserScreen(
                         }
                     )
                     
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        modifier = Modifier.width(280.dp)
-                    ) {
-                        // Top Row of Icons
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = { webView?.goBack(); showMenu = false }, enabled = canGoBack) {
-                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-                            }
-                            IconButton(onClick = { viewModel.toggleBookmark(); showMenu = false }) {
-                                Icon(
-                                    if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                                    contentDescription = "Bookmark",
-                                    tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            IconButton(onClick = { /* Download trigger */ showMenu = false }) {
-                                Icon(Icons.Rounded.Download, contentDescription = "Download")
-                            }
-                            IconButton(onClick = { /* Info trigger */ showMenu = false }) {
-                                Icon(Icons.Rounded.Info, contentDescription = "Info")
-                            }
-                            IconButton(onClick = { webView?.reload(); showMenu = false }) {
-                                Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
-                            }
-                        }
-                        
-                        HorizontalDivider()
-
-                        DropdownMenuItem(
-                            text = { Text("History & Bookmarks") },
-                            onClick = {
-                                showHistoryBookmarks = true
-                                showMenu = false
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.History, contentDescription = null)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Desktop Site") },
-                            onClick = {
-                                viewModel.toggleDesktopSite()
-                                showMenu = false
-                            },
-                            trailingIcon = {
-                                Checkbox(
-                                    checked = currentTab.isDesktopSite,
-                                    onCheckedChange = null
-                                )
-                            }
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("Refresh") },
-                            onClick = {
-                                webView?.reload()
-                                showMenu = false
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
-                        )
-                    }
-
                     if (isLoading) {
                         LinearProgressIndicator(
                             progress = { progress / 100f },
@@ -381,7 +397,8 @@ fun BrowserScreen(
                             onTitleChanged = { viewModel.onTitleChange(it) },
                             onSslError = { handler, error ->
                                 sslErrorToHandle = handler to error
-                            }
+                            },
+                            onCaptureSnapshot = { viewModel.captureSnapshot(it) }
                         )
                     }
                 }
@@ -411,8 +428,10 @@ fun BrowserScreen(
             onDismissRequest = { showTabSwitcher = false },
             modifier = Modifier.fillMaxHeight(0.9f)
         ) {
+            val groups by viewModel.groups.collectAsState()
             TabSwitcherContent(
                 tabs = tabs,
+                groups = groups,
                 selectedTabIndex = selectedTabIndex,
                 onTabSelect = { index ->
                     viewModel.selectTab(index)
@@ -424,6 +443,12 @@ fun BrowserScreen(
                 onNewTab = {
                     viewModel.addNewTab()
                     showTabSwitcher = false
+                },
+                onMergeTabs = { dragged, target ->
+                    viewModel.mergeTabs(dragged, target)
+                },
+                onRenameGroup = { id, name ->
+                    viewModel.renameGroup(id, name)
                 }
             )
         }
@@ -461,113 +486,196 @@ fun BrowserScreen(
 @Composable
 fun TabSwitcherContent(
     tabs: List<BrowserTabState>,
+    groups: List<TabGroup>,
     selectedTabIndex: Int,
     onTabSelect: (Int) -> Unit,
     onTabClose: (Int) -> Unit,
-    onNewTab: () -> Unit
+    onNewTab: () -> Unit,
+    onMergeTabs: (String, String) -> Unit,
+    onRenameGroup: (String, String) -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    var draggedTabId by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var selectedGroupForDetail by remember { mutableStateOf<TabGroup?>(null) }
+
+    // Map tab IDs to their current positions in the grid for drag detection
+    val itemPositions = remember { mutableStateMapOf<String, Pair<Offset, IntSize>>() }
+
+    val topLevelItems = remember(tabs, groups) {
+        val groupedTabIds = groups.flatMap { it.tabIds }.toSet()
+        val ungroupedTabs = tabs.filter { it.id !in groupedTabIds }
+        (ungroupedTabs.map { it to null } + groups.map { null to it }).sortedBy { 
+            val id = it.first?.id ?: it.second?.id ?: ""
+            // Sort by earliest tab in item
+            val firstTabId = it.first?.id ?: it.second?.tabIds?.firstOrNull() ?: ""
+            tabs.indexOfFirst { t -> t.id == firstTabId }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            Text(
-                text = "${tabs.size} Tabs",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            IconButton(onClick = onNewTab) {
-                Icon(Icons.Rounded.Add, contentDescription = "New Tab")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${tabs.size} Tabs",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onNewTab) {
+                    Icon(Icons.Rounded.Add, contentDescription = "New Tab")
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(topLevelItems) { item ->
+                    val tab = item.first
+                    val group = item.second
+                    val itemId = tab?.id ?: group?.id ?: ""
+
+                    Box(
+                        modifier = Modifier
+                            .onGloballyPositioned { coordinates ->
+                                itemPositions[itemId] = coordinates.positionInWindow() to coordinates.size
+                            }
+                            .pointerInput(itemId) {
+                                if (tab != null) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = { offset ->
+                                            draggedTabId = tab.id
+                                            dragOffset = Offset.Zero
+                                        },
+                                        onDragEnd = {
+                                            draggedTabId?.let { draggedId ->
+                                                val absoluteDragPos = itemPositions[draggedId]?.first?.plus(dragOffset) ?: Offset.Zero
+                                                
+                                                // Check for overlap with other items
+                                                itemPositions.forEach { (targetId, posAndSize) ->
+                                                    if (targetId != draggedId) {
+                                                        val (pos, size) = posAndSize
+                                                        if (absoluteDragPos.x > pos.x && absoluteDragPos.x < pos.x + size.width &&
+                                                            absoluteDragPos.y > pos.y && absoluteDragPos.y < pos.y + size.height) {
+                                                            onMergeTabs(draggedId, targetId)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            draggedTabId = null
+                                        },
+                                        onDragCancel = { draggedTabId = null },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragOffset += dragAmount
+                                        }
+                                    )
+                                }
+                            }
+                            .alpha(if (draggedTabId == itemId) 0.5f else 1.0f)
+                    ) {
+                        if (tab != null) {
+                            TabCard(
+                                tab = tab,
+                                isSelected = tabs.indexOf(tab) == selectedTabIndex,
+                                onSelect = { onTabSelect(tabs.indexOf(tab)) },
+                                onClose = { onTabClose(tabs.indexOf(tab)) }
+                            )
+                        } else if (group != null) {
+                            GroupCard(
+                                group = group,
+                                tabs = tabs,
+                                onClick = { selectedGroupForDetail = group }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Dragging overlay
+        draggedTabId?.let { id ->
+            val draggedTab = tabs.find { it.id == id }
+            if (draggedTab != null) {
+                val startPos = itemPositions[id]?.first ?: Offset.Zero
+                Box(
+                    modifier = Modifier
+                        .offset(
+                            x = (startPos.x + dragOffset.x).pxToDp(),
+                            y = (startPos.y + dragOffset.y).pxToDp()
+                        )
+                        .size(150.dp) // Approximate card size
+                        .zIndex(100f)
+                ) {
+                    TabCard(tab = draggedTab, isSelected = false, onSelect = {}, onClose = {})
+                }
             }
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            itemsIndexed(tabs) { index, tab ->
-                Card(
+        selectedGroupForDetail?.let { group ->
+            Popup(
+                onDismissRequest = { selectedGroupForDetail = null },
+                properties = PopupProperties(focusable = true)
+            ) {
+                Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(0.8f)
-                        .border(
-                            width = if (index == selectedTabIndex) 2.dp else 0.dp,
-                            color = if (index == selectedTabIndex) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            shape = MaterialTheme.shapes.medium
-                        )
-                        .clickable { onTabSelect(index) },
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(8.dp)
-                    ) {
-                        Row(
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        var groupName by remember { mutableStateOf(group.name) }
+                        OutlinedTextField(
+                            value = groupName,
+                            onValueChange = { 
+                                groupName = it
+                                onRenameGroup(group.id, it)
+                            },
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            textStyle = MaterialTheme.typography.titleMedium,
+                            label = { Text("Group Name") }
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Text(
-                                text = tab.title,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = { onTabClose(index) },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Close,
-                                    contentDescription = "Close Tab",
-                                    modifier = Modifier.size(16.dp)
+                            val groupTabs = tabs.filter { it.id in group.tabIds }
+                            itemsIndexed(groupTabs) { _, groupTab ->
+                                TabCard(
+                                    tab = groupTab,
+                                    isSelected = tabs.indexOf(groupTab) == selectedTabIndex,
+                                    onSelect = { 
+                                        onTabSelect(tabs.indexOf(groupTab))
+                                        selectedGroupForDetail = null
+                                    },
+                                    onClose = { onTabClose(tabs.indexOf(groupTab)) }
                                 )
                             }
                         }
                         
-                        Spacer(modifier = Modifier.height(4.dp))
-                        
-                        Text(
-                            text = tab.url,
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Mini window placeholder
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .background(
-                                    MaterialTheme.colorScheme.surface,
-                                    MaterialTheme.shapes.small
-                                ),
-                            contentAlignment = Alignment.Center
+                        Button(
+                            onClick = { selectedGroupForDetail = null },
+                            modifier = Modifier.align(Alignment.End)
                         ) {
-                            Icon(
-                                Icons.Rounded.Web,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                modifier = Modifier.size(48.dp)
-                            )
+                            Text("Done")
                         }
                     }
                 }
@@ -575,6 +683,180 @@ fun TabSwitcherContent(
         }
     }
 }
+
+@Composable
+fun TabCard(
+    tab: BrowserTabState,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+    onClose: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(0.8f)
+            .border(
+                width = if (isSelected) 2.dp else 0.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = MaterialTheme.shapes.medium
+            )
+            .clickable { onSelect() },
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = tab.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = "Close Tab",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = tab.url,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.shapes.small
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (tab.thumbnail != null) {
+                    Image(
+                        bitmap = tab.thumbnail.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.small)
+                    )
+                } else {
+                    Icon(
+                        Icons.Rounded.Web,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GroupCard(
+    group: TabGroup,
+    tabs: List<BrowserTabState>,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(0.8f)
+            .clickable { onClick() },
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Layers, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.shapes.small
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                // Stack of thumbnails
+                val groupTabs = tabs.filter { it.id in group.tabIds }.take(4)
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize().padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    userScrollEnabled = false
+                ) {
+                    items(groupTabs) { gTab ->
+                        if (gTab.thumbnail != null) {
+                            Image(
+                                bitmap = gTab.thumbnail.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.extraSmall)
+                            )
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+                        }
+                    }
+                }
+            }
+            
+            Text(
+                text = "${group.tabIds.size} tabs",
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun Offset.pxToDp() = with(androidx.compose.ui.platform.LocalDensity.current) { this@pxToDp.y.toDp() }
+// Simple helper - actually needs x and y
+@Composable
+fun Float.pxToDp() = with(androidx.compose.ui.platform.LocalDensity.current) { this@pxToDp.toDp() }
 
 @Composable
 fun HomePage(
@@ -749,7 +1031,8 @@ fun WebViewContainer(
     onNavigationStateChanged: (Boolean, Boolean) -> Unit,
     onUrlChanged: (String) -> Unit,
     onTitleChanged: (String) -> Unit,
-    onSslError: (SslErrorHandler, SslError) -> Unit
+    onSslError: (SslErrorHandler, SslError) -> Unit,
+    onCaptureSnapshot: (WebView) -> Unit
 ) {
     val desktopUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     val mobileUserAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
@@ -793,6 +1076,7 @@ fun WebViewContainer(
                         onLoadingStateChanged(false)
                         onNavigationStateChanged(view?.canGoBack() ?: false, view?.canGoForward() ?: false)
                         view?.title?.let { onTitleChanged(it) }
+                        view?.let { onCaptureSnapshot(it) }
                     }
 
                     override fun shouldOverrideUrlLoading(

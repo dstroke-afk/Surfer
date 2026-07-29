@@ -1,6 +1,8 @@
 package com.example.surfer.ui
 
+import android.graphics.Bitmap
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import java.util.UUID
 
 @Serializable
@@ -14,5 +16,7 @@ data class BrowserTabState(
     val progress: Int = 0,
     val isDesktopSite: Boolean = false,
     val isSuspended: Boolean = false,
-    val isHomePage: Boolean = true
+    val isHomePage: Boolean = true,
+    val groupId: String? = null,
+    @Transient val thumbnail: Bitmap? = null
 )
