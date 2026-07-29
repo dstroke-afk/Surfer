@@ -25,4 +25,16 @@ interface BrowserDao {
 
     @Query("SELECT EXISTS(SELECT * FROM bookmarks WHERE url = :url)")
     fun isBookmarked(url: String): Flow<Boolean>
+
+    @Query("SELECT * FROM bookmarks WHERE url = :url LIMIT 1")
+    fun getBookmarkByUrl(url: String): Flow<BookmarkEntity?>
+
+    @Query("SELECT DISTINCT folder FROM bookmarks")
+    fun getAllFolders(): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFolder(folder: BookmarkFolderEntity)
+
+    @Query("SELECT name FROM bookmark_folders ORDER BY name ASC")
+    fun getCreatedFolders(): Flow<List<String>>
 }

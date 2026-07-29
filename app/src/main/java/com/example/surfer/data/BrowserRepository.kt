@@ -14,8 +14,8 @@ class BrowserRepository(private val dao: BrowserDao) {
         dao.clearHistory()
     }
 
-    suspend fun addBookmark(url: String, title: String) {
-        dao.insertBookmark(BookmarkEntity(url = url, title = title))
+    suspend fun addBookmark(url: String, title: String, folder: String = "Mobile Bookmarks") {
+        dao.insertBookmark(BookmarkEntity(url = url, title = title, folder = folder))
     }
 
     suspend fun removeBookmark(url: String, title: String) {
@@ -23,4 +23,14 @@ class BrowserRepository(private val dao: BrowserDao) {
     }
 
     fun isBookmarked(url: String): Flow<Boolean> = dao.isBookmarked(url)
+
+    fun getBookmarkByUrl(url: String): Flow<BookmarkEntity?> = dao.getBookmarkByUrl(url)
+
+    fun getAllFolders(): Flow<List<String>> = dao.getAllFolders()
+
+    suspend fun createFolder(name: String) {
+        dao.insertFolder(BookmarkFolderEntity(name = name))
+    }
+
+    fun getCreatedFolders(): Flow<List<String>> = dao.getCreatedFolders()
 }

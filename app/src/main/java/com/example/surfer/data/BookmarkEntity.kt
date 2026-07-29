@@ -7,5 +7,6 @@ import androidx.room.PrimaryKey
 data class BookmarkEntity(
     @PrimaryKey val url: String,
     val title: String,
+    val folder: String = "Mobile Bookmarks",
     val timestamp: Long = System.currentTimeMillis()
 )

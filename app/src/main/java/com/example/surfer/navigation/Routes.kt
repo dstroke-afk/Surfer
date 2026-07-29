@@ -5,3 +5,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 object BrowserRoute : NavKey
+
+@Serializable
+data class EditBookmarkRoute(val url: String) : NavKey
+
+@Serializable
+data class FolderSelectionRoute(val currentFolder: String) : NavKey

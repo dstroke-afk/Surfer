@@ -65,6 +65,7 @@ fun BrowserScreenPreview() {
 @Composable
 fun BrowserScreen(
     viewModel: BrowserViewModel,
+    onEditBookmark: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val browserState by viewModel.state.collectAsState()
@@ -75,6 +76,7 @@ fun BrowserScreen(
     val isBookmarked by viewModel.isCurrentBookmarked.collectAsState()
     val history by viewModel.history.collectAsState()
     val bookmarks by viewModel.bookmarks.collectAsState()
+    val snackbarMessage by viewModel.snackbarMessage.collectAsState()
 
     val adaptiveInfo = currentWindowAdaptiveInfo()
     val isExpanded = adaptiveInfo.windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.EXPANDED
@@ -93,6 +95,21 @@ fun BrowserScreen(
     var showTabSwitcher by remember { mutableStateOf(false) }
     var sslErrorToHandle by remember { mutableStateOf<Pair<SslErrorHandler, SslError>?>(null) }
     val focusManager = LocalFocusManager.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(snackbarMessage) {
+        snackbarMessage?.let {
+            val result = snackbarHostState.showSnackbar(
+                message = it,
+                actionLabel = "Edit",
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                onEditBookmark(url)
+            }
+            viewModel.clearSnackbar()
+        }
+    }
 
     BackHandler(enabled = canGoBack) {
         webView?.goBack()
@@ -135,6 +152,7 @@ fun BrowserScreen(
         modifier = modifier.fillMaxSize()
     ) {
         Scaffold(
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             topBar = {
                 Column(modifier = Modifier.statusBarsPadding()) {
                     TopAppBar(
@@ -258,21 +276,40 @@ fun BrowserScreen(
                     
                     DropdownMenu(
                         expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.width(280.dp)
                     ) {
-                        DropdownMenuItem(
-                            text = { Text(if (isBookmarked) "Remove Bookmark" else "Bookmark") },
-                            onClick = {
-                                viewModel.toggleBookmark()
-                                showMenu = false
-                            },
-                            leadingIcon = {
+                        // Top Row of Icons
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { webView?.goBack(); showMenu = false }, enabled = canGoBack) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                            }
+                            IconButton(onClick = { viewModel.toggleBookmark(); showMenu = false }) {
                                 Icon(
-                                    if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                                    contentDescription = null
+                                    if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                    contentDescription = "Bookmark",
+                                    tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                 )
                             }
-                        )
+                            IconButton(onClick = { /* Download trigger */ showMenu = false }) {
+                                Icon(Icons.Rounded.Download, contentDescription = "Download")
+                            }
+                            IconButton(onClick = { /* Info trigger */ showMenu = false }) {
+                                Icon(Icons.Rounded.Info, contentDescription = "Info")
+                            }
+                            IconButton(onClick = { webView?.reload(); showMenu = false }) {
+                                Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
+                            }
+                        }
+                        
+                        HorizontalDivider()
+
                         DropdownMenuItem(
                             text = { Text("History & Bookmarks") },
                             onClick = {
@@ -599,55 +636,13 @@ fun HomePage(
                     keyboardActions = KeyboardActions(onSearch = { onSearch(searchText) }),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     decorationBox = { innerTextField ->
-                        if (searchText.isEmpty()) {
-                            Text(
-                                "Search Google or type URL",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        }
                         innerTextField()
                     }
                 )
-                IconButton(onClick = { /* Voice placeholder */ }) {
-                    Icon(Icons.Rounded.Mic, contentDescription = "Voice Search")
-                }
-                IconButton(onClick = { /* Lens placeholder */ }) {
-                    Icon(Icons.Rounded.CenterFocusWeak, contentDescription = "Google Lens")
-                }
             }
         }
         
         Spacer(modifier = Modifier.height(24.dp))
-        
-        // AI Mode & Incognito Buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = { /* AI Mode */ },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                contentPadding = PaddingValues(12.dp)
-            ) {
-                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("AI Mode", color = MaterialTheme.colorScheme.onSecondaryContainer)
-            }
-            Button(
-                onClick = { /* Incognito */ },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                contentPadding = PaddingValues(12.dp)
-            ) {
-                Icon(Icons.Rounded.VisibilityOff, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Incognito", color = MaterialTheme.colorScheme.onSecondaryContainer)
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(32.dp))
         
         // Shortcuts Grid (Renamed from Frequently Visited)
         val shortcuts = listOf(

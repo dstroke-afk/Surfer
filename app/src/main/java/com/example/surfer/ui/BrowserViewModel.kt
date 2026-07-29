@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.update
 
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
+import com.example.surfer.data.BookmarkEntity
 import com.example.surfer.data.BrowserDatabase
 import com.example.surfer.data.BrowserRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -127,14 +128,47 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
         updateCurrentTab { it.copy(title = title) }
     }
 
+    private val _lastUsedFolder = MutableStateFlow("Mobile Bookmarks")
+    val lastUsedFolder: StateFlow<String> = _lastUsedFolder.asStateFlow()
+
+    private val _snackbarMessage = MutableStateFlow<String?>(null)
+    val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
+
     fun toggleBookmark() {
         val tab = currentTab.value ?: return
         viewModelScope.launch {
             if (isCurrentBookmarked.value) {
                 repository.removeBookmark(tab.url, tab.title)
             } else {
-                repository.addBookmark(tab.url, tab.title)
+                repository.addBookmark(tab.url, tab.title, _lastUsedFolder.value)
+                _snackbarMessage.value = "Bookmark saved to ${_lastUsedFolder.value}"
             }
+        }
+    }
+
+    fun clearSnackbar() {
+        _snackbarMessage.value = null
+    }
+
+    fun updateBookmark(url: String, title: String, folder: String) {
+        viewModelScope.launch {
+            repository.addBookmark(url, title, folder)
+            _lastUsedFolder.value = folder
+        }
+    }
+
+    fun getBookmark(url: String): Flow<BookmarkEntity?> = repository.getBookmarkByUrl(url)
+
+    fun getAllFolders(): Flow<List<String>> = combine(
+        repository.getAllFolders(),
+        repository.getCreatedFolders()
+    ) { existing, created ->
+        (existing + created + "Mobile Bookmarks" + "Reading List").distinct().sorted()
+    }
+
+    fun createFolder(name: String) {
+        viewModelScope.launch {
+            repository.createFolder(name)
         }
     }
 
