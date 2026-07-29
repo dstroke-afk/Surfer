@@ -38,7 +38,7 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
 
     fun addNewTab(url: String = "https://www.google.com") {
         _state.update { currentState ->
-            val newTabs = currentState.tabs + BrowserTabState(url = url)
+            val newTabs = currentState.tabs + BrowserTabState(url = url, isHomePage = true)
             currentState.copy(
                 tabs = newTabs,
                 selectedTabIndex = newTabs.lastIndex
@@ -98,7 +98,11 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
     }
 
     fun onUrlChange(newUrl: String) {
-        updateCurrentTab { it.copy(url = newUrl) }
+        updateCurrentTab { it.copy(url = newUrl, isHomePage = false) }
+    }
+
+    fun goHome() {
+        updateCurrentTab { it.copy(url = "https://www.google.com", isHomePage = true) }
     }
 
     fun onLoadingStateChange(isLoading: Boolean) {
@@ -145,9 +149,24 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
     }
 
     fun navigateTo(newUrl: String) {
-        var formattedUrl = newUrl.trim()
-        if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
-            formattedUrl = "https://www.google.com/search?q=$formattedUrl"
+        val trimmed = newUrl.trim()
+        if (trimmed.isEmpty()) return
+
+        val isUrl = trimmed.contains(".") && !trimmed.contains(" ") ||
+                trimmed.startsWith("http://") ||
+                trimmed.startsWith("https://") ||
+                trimmed.startsWith("about:") ||
+                trimmed.startsWith("chrome:") ||
+                trimmed.startsWith("file://")
+
+        val formattedUrl = if (isUrl) {
+            if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://") && !trimmed.contains(":")) {
+                "https://$trimmed"
+            } else {
+                trimmed
+            }
+        } else {
+            "https://www.google.com/search?q=$trimmed"
         }
         onUrlChange(formattedUrl)
     }

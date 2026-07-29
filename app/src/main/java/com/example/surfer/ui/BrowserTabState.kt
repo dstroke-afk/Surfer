@@ -13,5 +13,6 @@ data class BrowserTabState(
     val isLoading: Boolean = false,
     val progress: Int = 0,
     val isDesktopSite: Boolean = false,
-    val isSuspended: Boolean = false
+    val isSuspended: Boolean = false,
+    val isHomePage: Boolean = true
 )

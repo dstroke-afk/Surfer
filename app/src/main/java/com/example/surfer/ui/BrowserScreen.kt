@@ -32,11 +32,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.window.core.layout.WindowWidthSizeClass
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.tooling.preview.Preview
@@ -133,7 +143,7 @@ fun BrowserScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 // Home button
-                                IconButton(onClick = { viewModel.navigateTo("https://www.google.com") }) {
+                                IconButton(onClick = { viewModel.goHome() }) {
                                     Icon(Icons.Rounded.Home, contentDescription = "Home")
                                 }
 
@@ -155,7 +165,8 @@ fun BrowserScreen(
                                             onValueChange = { textFieldValue = it },
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 12.dp),
+                                                .padding(horizontal = 12.dp)
+                                                .horizontalScroll(rememberScrollState()),
                                             singleLine = true,
                                             textStyle = MaterialTheme.typography.bodyMedium.copy(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -342,30 +353,36 @@ fun BrowserScreen(
                     }
                 }
             }
-        )
-{ padding ->
+        ) { padding ->
             Box(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
             ) {
-                key(currentTab.id) {
-                    WebViewContainer(
-                        url = currentTab.url,
-                        isDesktopSite = currentTab.isDesktopSite,
-                        isSuspended = currentTab.isSuspended,
-                        onWebViewCreated = { webView = it },
-                        onProgressChanged = { viewModel.onProgressChange(it) },
-                        onLoadingStateChanged = { viewModel.onLoadingStateChange(it) },
-                        onNavigationStateChanged = { canBack, canForward ->
-                            viewModel.onNavigationStateChange(canBack, canForward)
-                        },
-                        onUrlChanged = { viewModel.onUrlChange(it) },
-                        onTitleChanged = { viewModel.onTitleChange(it) },
-                        onSslError = { handler, error ->
-                            sslErrorToHandle = handler to error
-                        }
+                if (currentTab.isHomePage) {
+                    HomePage(
+                        onSearch = { viewModel.navigateTo(it) },
+                        modifier = Modifier.fillMaxSize()
                     )
+                } else {
+                    key(currentTab.id) {
+                        WebViewContainer(
+                            url = currentTab.url,
+                            isDesktopSite = currentTab.isDesktopSite,
+                            isSuspended = currentTab.isSuspended,
+                            onWebViewCreated = { webView = it },
+                            onProgressChanged = { viewModel.onProgressChange(it) },
+                            onLoadingStateChanged = { viewModel.onLoadingStateChange(it) },
+                            onNavigationStateChanged = { canBack, canForward ->
+                                viewModel.onNavigationStateChange(canBack, canForward)
+                            },
+                            onUrlChanged = { viewModel.onUrlChange(it) },
+                            onTitleChanged = { viewModel.onTitleChange(it) },
+                            onSslError = { handler, error ->
+                                sslErrorToHandle = handler to error
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -418,6 +435,162 @@ fun BrowserScreen(
 }
 
 @Composable
+fun HomePage(
+    onSearch: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = modifier
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(48.dp))
+        
+        // Google-style Logo
+        Text(
+            text = "Google",
+            style = MaterialTheme.typography.displayLarge.copy(
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // Large Search Box
+        var searchText by remember { mutableStateOf("") }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                BasicTextField(
+                    value = searchText,
+                    onValueChange = { searchText = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearch(searchText) }),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    decorationBox = { innerTextField ->
+                        if (searchText.isEmpty()) {
+                            Text(
+                                "Search Google or type URL",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                        innerTextField()
+                    }
+                )
+                IconButton(onClick = { /* Voice placeholder */ }) {
+                    Icon(Icons.Rounded.Mic, contentDescription = "Voice Search")
+                }
+                IconButton(onClick = { /* Lens placeholder */ }) {
+                    Icon(Icons.Rounded.CenterFocusWeak, contentDescription = "Google Lens")
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // AI Mode & Incognito Buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = { /* AI Mode */ },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                contentPadding = PaddingValues(12.dp)
+            ) {
+                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("AI Mode", color = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+            Button(
+                onClick = { /* Incognito */ },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                contentPadding = PaddingValues(12.dp)
+            ) {
+                Icon(Icons.Rounded.VisibilityOff, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Incognito", color = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // Shortcuts Grid (Renamed from Frequently Visited)
+        val shortcuts = listOf(
+            "Google" to "https://www.google.com",
+            "YouTube" to "https://www.youtube.com",
+            "Amazon" to "https://www.amazon.com",
+            "Wikipedia" to "https://www.wikipedia.org"
+        )
+        
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(4),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            userScrollEnabled = false
+        ) {
+            items(shortcuts) { (name, url) ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onSearch(url) }.padding(4.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                when(name) {
+                                    "Google" -> Icons.Rounded.Search
+                                    "YouTube" -> Icons.Rounded.PlayArrow
+                                    "Amazon" -> Icons.Rounded.ShoppingBag
+                                    else -> Icons.Rounded.Language
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(name, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+    @Composable
 fun HistoryBookmarksContent(
     history: List<com.example.surfer.data.HistoryEntity>,
     bookmarks: List<com.example.surfer.data.BookmarkEntity>,
