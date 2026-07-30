@@ -25,6 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -102,7 +105,9 @@ fun BrowserScreen(
     val progress = currentTab.progress
     val canGoBack = currentTab.canGoBack
 
-    var textFieldValue by remember(url) { mutableStateOf(url) }
+    var textFieldValue by remember(url) { 
+        mutableStateOf(TextFieldValue(text = url, selection = TextRange(url.length))) 
+    }
     var webView: WebView? by remember { mutableStateOf(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showHistoryBookmarks by remember { mutableStateOf(false) }
@@ -191,68 +196,73 @@ fun BrowserScreen(
                                         .height(40.dp)
                                         .padding(horizontal = 4.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.CenterStart
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 12.dp)
                                     ) {
-                                        BasicTextField(
-                                            value = textFieldValue,
-                                            onValueChange = { textFieldValue = it },
+                                        Icon(
+                                            if (url.startsWith("https")) Icons.Rounded.Lock else Icons.Rounded.Info,
+                                            contentDescription = "Page Info",
                                             modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp)
-                                                .horizontalScroll(rememberScrollState()),
-                                            singleLine = true,
-                                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            ),
-                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                                            keyboardActions = KeyboardActions(
-                                                onGo = {
-                                                    viewModel.navigateTo(textFieldValue)
-                                                    focusManager.clearFocus()
-                                                }
-                                            ),
-                                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                            decorationBox = { innerTextField ->
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.fillMaxSize()
-                                                ) {
-                                                    Icon(
-                                                        if (url.startsWith("https")) Icons.Rounded.Lock else Icons.Rounded.Info,
-                                                        contentDescription = "Page Info",
-                                                        modifier = Modifier
-                                                            .size(16.dp)
-                                                            .clickable { showPageInfo = true },
-                                                        tint = if (url.startsWith("https")) 
-                                                            MaterialTheme.colorScheme.primary 
-                                                        else 
-                                                            MaterialTheme.colorScheme.error
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Box(modifier = Modifier.weight(1f)) {
-                                                        if (textFieldValue.isEmpty()) {
-                                                            Text(
-                                                                "Search or type URL",
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                                maxLines = 1,
-                                                                overflow = TextOverflow.Ellipsis
-                                                            )
-                                                        }
-                                                        innerTextField()
+                                                .size(16.dp)
+                                                .clickable { showPageInfo = true },
+                                            tint = if (url.startsWith("https")) 
+                                                MaterialTheme.colorScheme.primary 
+                                            else 
+                                                MaterialTheme.colorScheme.error
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        
+                                        // The actual text field isolated for correct scrolling
+                                        Box(
+                                            modifier = Modifier.weight(1f),
+                                            contentAlignment = Alignment.CenterStart
+                                        ) {
+                                            BasicTextField(
+                                                value = textFieldValue,
+                                                onValueChange = { textFieldValue = it },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                ),
+                                                keyboardOptions = KeyboardOptions(
+                                                    imeAction = ImeAction.Go,
+                                                    keyboardType = KeyboardType.Uri,
+                                                    autoCorrect = false
+                                                ),
+                                                keyboardActions = KeyboardActions(
+                                                    onGo = {
+                                                        viewModel.navigateTo(textFieldValue.text)
+                                                        focusManager.clearFocus()
                                                     }
-                                                    if (isLoading) {
-                                                        CircularProgressIndicator(
-                                                            modifier = Modifier.size(16.dp),
-                                                            strokeWidth = 2.dp,
-                                                            color = MaterialTheme.colorScheme.primary
+                                                ),
+                                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                                decorationBox = { innerTextField ->
+                                                    if (textFieldValue.text.isEmpty()) {
+                                                        Text(
+                                                            "Search or type URL",
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
                                                         )
                                                     }
+                                                    innerTextField()
                                                 }
-                                            }
-                                        )
+                                            )
+                                        }
+
+                                        if (isLoading) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
                                 }
 
