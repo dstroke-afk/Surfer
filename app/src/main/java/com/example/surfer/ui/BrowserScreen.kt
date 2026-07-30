@@ -2,6 +2,7 @@ package com.example.surfer.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import java.io.File
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -72,6 +73,8 @@ import com.example.surfer.ui.theme.SurferTheme
 @Composable
 fun BrowserScreenPreview() {
     // Note: This preview won't fully work without a real repository, but we can't easily mock it here.
+    // To fix preview compilation, we pass dummy lambdas
+    // BrowserScreen(viewModel = ..., onEditBookmark = {}, onNavigateToDownloads = {})
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,6 +82,7 @@ fun BrowserScreenPreview() {
 fun BrowserScreen(
     viewModel: BrowserViewModel,
     onEditBookmark: (String) -> Unit,
+    onNavigateToDownloads: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val browserState by viewModel.state.collectAsState()
@@ -372,6 +376,14 @@ fun BrowserScreen(
                                             },
                                             leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) }
                                         )
+                                        DropdownMenuItem(
+                                            text = { Text("Downloads") },
+                                            onClick = {
+                                                onNavigateToDownloads()
+                                                showMenu = false
+                                            },
+                                            leadingIcon = { Icon(Icons.Rounded.Download, contentDescription = null) }
+                                        )
                                     }
                                 }
                             }
@@ -421,6 +433,9 @@ fun BrowserScreen(
                             onCaptureSnapshot = { 
                                 viewModel.captureSnapshot(it)
                                 viewModel.updatePageInfo(it)
+                            },
+                            onDownloadStart = { url, fileName, filePath, mimeType, contentLength ->
+                                viewModel.onDownloadStart(url, fileName, filePath, mimeType, contentLength)
                             }
                         )
                     }
@@ -957,7 +972,8 @@ fun WebViewContainer(
     onUrlChanged: (String) -> Unit,
     onTitleChanged: (String) -> Unit,
     onSslError: (SslErrorHandler, SslError) -> Unit,
-    onCaptureSnapshot: (WebView) -> Unit
+    onCaptureSnapshot: (WebView) -> Unit,
+    onDownloadStart: (String, String, String, String?, Long) -> Unit
 ) {
     val desktopUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     val mobileUserAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
@@ -1033,15 +1049,21 @@ fun WebViewContainer(
                     }
                 }
 
-                setDownloadListener { downloadUrl, userAgent, contentDisposition, mimetype, _ ->
+                setDownloadListener { downloadUrl, userAgent, contentDisposition, mimetype, contentLength ->
+                    val fileName = android.webkit.URLUtil.guessFileName(downloadUrl, contentDisposition, mimetype)
                     val request = android.app.DownloadManager.Request(android.net.Uri.parse(downloadUrl))
                     request.setMimeType(mimetype)
                     request.addRequestHeader("User-Agent", userAgent)
                     request.setDescription("Downloading file...")
-                    request.setTitle(android.webkit.URLUtil.guessFileName(downloadUrl, contentDisposition, mimetype))
+                    request.setTitle(fileName)
                     request.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, android.webkit.URLUtil.guessFileName(downloadUrl, contentDisposition, mimetype))
+                    request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName)
+                    
                     (context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager).enqueue(request)
+                    
+                    val filePath = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), fileName).absolutePath
+                    onDownloadStart(downloadUrl, fileName, filePath, mimetype, contentLength)
+
                     android.widget.Toast.makeText(context, "Download started", android.widget.Toast.LENGTH_SHORT).show()
                 }
 

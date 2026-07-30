@@ -43,4 +43,18 @@ class BrowserRepository(private val dao: BrowserDao) {
     }
 
     fun getCreatedFolders(): Flow<List<String>> = dao.getCreatedFolders()
+
+    val allDownloads: Flow<List<DownloadEntity>> = dao.getAllDownloads()
+
+    suspend fun addDownload(download: DownloadEntity) {
+        dao.insertDownload(download)
+    }
+
+    suspend fun updateDownload(download: DownloadEntity) {
+        dao.updateDownload(download)
+    }
+
+    suspend fun deleteDownload(id: String) {
+        dao.deleteDownload(id)
+    }
 }

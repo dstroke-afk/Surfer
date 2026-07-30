@@ -10,6 +10,8 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.surfer.data.BookmarkEntity
 import com.example.surfer.data.BrowserDatabase
 import com.example.surfer.data.BrowserRepository
+import com.example.surfer.data.DownloadEntity
+import com.example.surfer.data.DownloadStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -28,6 +30,7 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
 
     val history = repository.allHistory.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val bookmarks = repository.allBookmarks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val downloads = repository.allDownloads.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val isCurrentBookmarked: StateFlow<Boolean> = currentTab
         .flatMapLatest { tab ->
@@ -351,8 +354,10 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
     }
 
     fun saveHtml(title: String, html: String, context: android.content.Context) {
+        val tab = currentTab.value ?: return
         viewModelScope.launch {
             val fileName = "${title.replace(Regex("[^a-zA-Z0-9]"), "_")}.html"
+            var finalPath = ""
             
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 val contentValues = android.content.ContentValues().apply {
@@ -369,6 +374,7 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
                         resolver.openOutputStream(uri)?.use { outputStream ->
                             outputBuffer(html, outputStream)
                         }
+                        finalPath = uri.toString()
                     } catch (e: Exception) {
                         // Silently fail or log as requested to remove the popup
                     }
@@ -381,12 +387,56 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
                     java.io.FileOutputStream(file).use { outputStream ->
                         outputBuffer(html, outputStream)
                     }
+                    finalPath = file.absolutePath
                 } catch (e: Exception) {
                     // Silently fail or log
                 }
             }
+
+            if (finalPath.isNotEmpty()) {
+                repository.addDownload(
+                    DownloadEntity(
+                        fileName = fileName,
+                        filePath = finalPath,
+                        mimeType = "text/html",
+                        totalBytes = html.length.toLong(),
+                        downloadedBytes = html.length.toLong(),
+                        status = DownloadStatus.COMPLETED,
+                        originalUrl = tab.url
+                    )
+                )
+            }
         }
     }
+
+    fun deleteDownload(id: String) {
+        viewModelScope.launch {
+            repository.deleteDownload(id)
+        }
+    }
+
+    fun onDownloadStart(
+        url: String,
+        fileName: String,
+        filePath: String,
+        mimeType: String?,
+        contentLength: Long
+    ) {
+        viewModelScope.launch {
+            repository.addDownload(
+                DownloadEntity(
+                    fileName = fileName,
+                    filePath = filePath,
+                    mimeType = mimeType,
+                    totalBytes = contentLength,
+                    downloadedBytes = 0, // In reality, we'd track this via DownloadManager, but for simplicity we start at 0
+                    status = DownloadStatus.IN_PROGRESS,
+                    originalUrl = url
+                )
+            )
+        }
+    }
+
 
     private fun outputBuffer(content: String, outputStream: java.io.OutputStream) {
         val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(outputStream))

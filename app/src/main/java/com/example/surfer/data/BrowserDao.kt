@@ -40,4 +40,16 @@ interface BrowserDao {
 
     @Query("SELECT name FROM bookmark_folders ORDER BY name ASC")
     fun getCreatedFolders(): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDownload(download: DownloadEntity)
+
+    @Query("SELECT * FROM download_records ORDER BY timestamp DESC")
+    fun getAllDownloads(): Flow<List<DownloadEntity>>
+
+    @Query("DELETE FROM download_records WHERE id = :id")
+    suspend fun deleteDownload(id: String)
+
+    @Update
+    suspend fun updateDownload(download: DownloadEntity)
 }

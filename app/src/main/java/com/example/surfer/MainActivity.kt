@@ -20,6 +20,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.example.surfer.navigation.BrowserRoute
+import com.example.surfer.navigation.DownloadsRoute
 import com.example.surfer.navigation.EditBookmarkRoute
 import com.example.surfer.navigation.FolderSelectionRoute
 import com.example.surfer.ui.*
@@ -93,6 +94,9 @@ fun MainApp(intent: Intent?) {
                         viewModel = viewModel,
                         onEditBookmark = { url ->
                             backStack.add(EditBookmarkRoute(url))
+                        },
+                        onNavigateToDownloads = {
+                            backStack.add(DownloadsRoute)
                         }
                     )
                 }
@@ -116,8 +120,22 @@ fun MainApp(intent: Intent?) {
                         }
                     )
                 }
+                is DownloadsRoute -> NavEntry<NavKey>(key) {
+                    DownloadsScreen(
+                        viewModel = viewModel,
+                        onBack = { backStack.removeLastOrNull() }
+                    )
+                }
                 else -> NavEntry<NavKey>(BrowserRoute) {
-                    BrowserScreen(viewModel = viewModel, onEditBookmark = {})
+                    BrowserScreen(
+                        viewModel = viewModel,
+                        onEditBookmark = { url ->
+                            backStack.add(EditBookmarkRoute(url))
+                        },
+                        onNavigateToDownloads = {
+                            backStack.add(DownloadsRoute)
+                        }
+                    )
                 }
             }
         }

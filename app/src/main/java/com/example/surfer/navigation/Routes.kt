@@ -11,3 +11,6 @@ data class EditBookmarkRoute(val url: String) : NavKey
 
 @Serializable
 data class FolderSelectionRoute(val currentFolder: String) : NavKey
+
+@Serializable
+object DownloadsRoute : NavKey
