@@ -114,13 +114,14 @@ fun BrowserScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(snackbarMessage) {
-        snackbarMessage?.let {
+        snackbarMessage?.let { message ->
+            val isBookmarkMessage = message.contains("Bookmark")
             val result = snackbarHostState.showSnackbar(
-                message = it,
-                actionLabel = "Edit",
+                message = message,
+                actionLabel = if (isBookmarkMessage) "Edit" else null,
                 duration = SnackbarDuration.Short
             )
-            if (result == SnackbarResult.ActionPerformed) {
+            if (isBookmarkMessage && result == SnackbarResult.ActionPerformed) {
                 onEditBookmark(url)
             }
             viewModel.clearSnackbar()
@@ -158,7 +159,7 @@ fun BrowserScreen(
                 }
                 item(
                     selected = false,
-                    onClick = { viewModel.addNewTab() },
+                    onClick = { viewModel.addNewTab(isIncognito = currentTab.isIncognito) },
                     icon = { Icon(Icons.Rounded.Add, contentDescription = "New Tab") },
                     label = { Text("New Tab") }
                 )
@@ -249,7 +250,7 @@ fun BrowserScreen(
                                 }
 
                                 // New Tab button
-                                IconButton(onClick = { viewModel.addNewTab() }) {
+                                IconButton(onClick = { viewModel.addNewTab(isIncognito = currentTab.isIncognito) }) {
                                     Icon(Icons.Rounded.Add, contentDescription = "New Tab")
                                 }
 
@@ -314,6 +315,7 @@ fun BrowserScreen(
                                                             .replace("\\\\", "\\")
                                                     } else html ?: ""
                                                     viewModel.saveHtml(currentTab.title, cleanedHtml, context)
+                                                    viewModel.showSnackbar("Downloaded")
                                                 }
                                                 showMenu = false 
                                             }) {
@@ -462,8 +464,8 @@ fun BrowserScreen(
                 onTabClose = { index ->
                     viewModel.removeTab(index)
                 },
-                onNewTab = {
-                    viewModel.addNewTab()
+                onNewTab = { isIncognito ->
+                    viewModel.addNewTab(isIncognito = isIncognito)
                     showTabSwitcher = false
                 },
                 onMergeTabs = { dragged, target ->
@@ -574,7 +576,7 @@ fun TabSwitcherContent(
     selectedTabIndex: Int,
     onTabSelect: (Int) -> Unit,
     onTabClose: (Int) -> Unit,
-    onNewTab: () -> Unit,
+    onNewTab: (Boolean) -> Unit,
     onMergeTabs: (String, String) -> Unit,
     onRenameGroup: (String, String) -> Unit
 ) {
@@ -643,7 +645,7 @@ fun TabSwitcherContent(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onNewTab) {
+                IconButton(onClick = { onNewTab(switcherMode == 1) }) {
                     Icon(Icons.Rounded.Add, contentDescription = "New Tab")
                 }
             }
