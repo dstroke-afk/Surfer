@@ -55,38 +55,39 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
 
     fun removeTab(index: Int) {
         _state.update { currentState ->
-            if (currentState.tabs.size > 1) {
-                val tabToRemove = currentState.tabs[index]
-                val newTabs = currentState.tabs.toMutableList().apply { removeAt(index) }
-                
-                // Check if we just closed the last incognito tab
-                val incognitoCount = newTabs.count { it.isIncognito }
-                if (tabToRemove.isIncognito && incognitoCount == 0) {
-                    cleanupIncognito()
-                }
-
-                // Cleanup groups if necessary
-                val newGroups = if (tabToRemove.groupId != null) {
-                    currentState.groups.map { group ->
-                        if (group.id == tabToRemove.groupId) {
-                            group.copy(tabIds = group.tabIds.filter { it != tabToRemove.id })
-                        } else group
-                    }.filter { it.tabIds.isNotEmpty() }
-                } else currentState.groups
-
-                val newIndex = if (currentState.selectedTabIndex >= newTabs.size) {
-                    newTabs.lastIndex
-                } else {
-                    currentState.selectedTabIndex
-                }
-                currentState.copy(
-                    tabs = newTabs,
-                    selectedTabIndex = newIndex,
-                    groups = newGroups
-                )
-            } else {
-                currentState
+            val tabToRemove = currentState.tabs[index]
+            val newTabs = currentState.tabs.toMutableList().apply { removeAt(index) }
+            
+            // If we closed the last tab, add a new default home tab
+            if (newTabs.isEmpty()) {
+                newTabs.add(BrowserTabState(url = "https://www.google.com", isHomePage = true))
             }
+            
+            // Check if we just closed the last incognito tab
+            val incognitoCount = newTabs.count { it.isIncognito }
+            if (tabToRemove.isIncognito && incognitoCount == 0) {
+                cleanupIncognito()
+            }
+
+            // Cleanup groups if necessary
+            val newGroups = if (tabToRemove.groupId != null) {
+                currentState.groups.map { group ->
+                    if (group.id == tabToRemove.groupId) {
+                        group.copy(tabIds = group.tabIds.filter { it != tabToRemove.id })
+                    } else group
+                }.filter { it.tabIds.isNotEmpty() }
+            } else currentState.groups
+
+            val newIndex = if (currentState.selectedTabIndex >= newTabs.size) {
+                newTabs.lastIndex
+            } else {
+                currentState.selectedTabIndex
+            }
+            currentState.copy(
+                tabs = newTabs,
+                selectedTabIndex = newIndex,
+                groups = newGroups
+            )
         }
     }
 
@@ -368,12 +369,9 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
                         resolver.openOutputStream(uri)?.use { outputStream ->
                             outputBuffer(html, outputStream)
                         }
-                        _snackbarMessage.value = "Saved $fileName to Downloads"
                     } catch (e: Exception) {
-                        _snackbarMessage.value = "Failed to save HTML: ${e.message}"
+                        // Silently fail or log as requested to remove the popup
                     }
-                } else {
-                    _snackbarMessage.value = "Failed to create file in Downloads"
                 }
             } else {
                 // Fallback for older Android versions
@@ -383,9 +381,8 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
                     java.io.FileOutputStream(file).use { outputStream ->
                         outputBuffer(html, outputStream)
                     }
-                    _snackbarMessage.value = "Saved $fileName to Downloads"
                 } catch (e: Exception) {
-                    _snackbarMessage.value = "Failed to save HTML: ${e.message}"
+                    // Silently fail or log
                 }
             }
         }

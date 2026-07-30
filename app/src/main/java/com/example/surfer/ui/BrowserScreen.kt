@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -107,7 +106,7 @@ fun BrowserScreen(
     }
     var webView: WebView? by remember { mutableStateOf(null) }
     var showMenu by remember { mutableStateOf(false) }
-    var showHistoryBookmarks by remember { mutableStateOf(false) }
+    var historyBookmarksMode by remember { mutableStateOf<Int?>(null) } // null: hidden, 0: Bookmarks, 1: History
     var showTabSwitcher by remember { mutableStateOf(false) }
     var showPageInfo by remember { mutableStateOf(false) }
     var sslErrorToHandle by remember { mutableStateOf<Pair<SslErrorHandler, SslError>?>(null) }
@@ -358,7 +357,7 @@ fun BrowserScreen(
                                         DropdownMenuItem(
                                             text = { Text("History") },
                                             onClick = {
-                                                showHistoryBookmarks = true
+                                                historyBookmarksMode = 1
                                                 showMenu = false
                                             },
                                             leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) }
@@ -366,7 +365,7 @@ fun BrowserScreen(
                                         DropdownMenuItem(
                                             text = { Text("Bookmarks") },
                                             onClick = {
-                                                showHistoryBookmarks = true
+                                                historyBookmarksMode = 0
                                                 showMenu = false
                                             },
                                             leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) }
@@ -428,17 +427,18 @@ fun BrowserScreen(
         }
     }
 
-    if (showHistoryBookmarks) {
+    if (historyBookmarksMode != null) {
         ModalBottomSheet(
-            onDismissRequest = { showHistoryBookmarks = false },
+            onDismissRequest = { historyBookmarksMode = null },
             modifier = Modifier.fillMaxHeight(0.9f)
         ) {
             HistoryBookmarksContent(
+                mode = historyBookmarksMode!!,
                 history = history,
                 bookmarks = bookmarks,
                 onUrlClick = {
                     viewModel.navigateTo(it)
-                    showHistoryBookmarks = false
+                    historyBookmarksMode = null
                 },
                 onClearHistory = { viewModel.clearHistory() }
             )
@@ -628,14 +628,6 @@ fun TabSwitcherContent(
                         tint = if (switcherMode == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.width(32.dp))
-                IconButton(onClick = { switcherMode = 2 }) {
-                    Icon(
-                        Icons.Rounded.Devices, 
-                        contentDescription = "Synced Tabs",
-                        tint = if (switcherMode == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
 
             Row(
@@ -646,8 +638,7 @@ fun TabSwitcherContent(
                 Text(
                     text = when(switcherMode) {
                         0 -> "${filteredTabs.size} Tabs"
-                        1 -> "${filteredTabs.size} Private Tabs"
-                        else -> "Synced Devices"
+                        else -> "${filteredTabs.size} Private Tabs"
                     },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
@@ -843,8 +834,6 @@ fun GroupCard(group: TabGroup, tabs: List<BrowserTabState>, onClick: () -> Unit)
 }
 
 @Composable
-fun Offset.pxToDp() = with(androidx.compose.ui.platform.LocalDensity.current) { this@pxToDp.y.toDp() }
-@Composable
 fun Float.pxToDp() = with(androidx.compose.ui.platform.LocalDensity.current) { this@pxToDp.toDp() }
 
 @Composable
@@ -890,25 +879,61 @@ fun HomePage(onSearch: (String) -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun HistoryBookmarksContent(history: List<com.example.surfer.data.HistoryEntity>, bookmarks: List<com.example.surfer.data.BookmarkEntity>, onUrlClick: (String) -> Unit, onClearHistory: () -> Unit) {
-    var selectedTab by remember { mutableStateOf(0) }
-    Column {
-        TabRow(selectedTabIndex = selectedTab) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Bookmarks") })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("History") })
-        }
-        if (selectedTab == 0) {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(bookmarks) { bookmark ->
-                    ListItem(headlineContent = { Text(bookmark.title, maxLines = 1) }, supportingContent = { Text(bookmark.url, maxLines = 1) }, modifier = Modifier.clickable { onUrlClick(bookmark.url) })
+fun HistoryBookmarksContent(
+    mode: Int, // 0: Bookmarks, 1: History
+    history: List<com.example.surfer.data.HistoryEntity>,
+    bookmarks: List<com.example.surfer.data.BookmarkEntity>,
+    onUrlClick: (String) -> Unit,
+    onClearHistory: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text(
+            text = if (mode == 0) "Bookmarks" else "History",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        if (mode == 0) {
+            if (bookmarks.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No bookmarks found", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(bookmarks) { bookmark ->
+                        ListItem(
+                            headlineContent = { Text(bookmark.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            supportingContent = { Text(bookmark.url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            leadingContent = { Icon(Icons.Rounded.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            modifier = Modifier.clickable { onUrlClick(bookmark.url) }
+                        )
+                    }
                 }
             }
         } else {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Button(onClick = onClearHistory, modifier = Modifier.padding(8.dp).align(Alignment.End), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Clear History") }
-                LazyColumn {
-                    items(history) { item ->
-                        ListItem(headlineContent = { Text(item.title, maxLines = 1) }, supportingContent = { Text(item.url, maxLines = 1) }, modifier = Modifier.clickable { onUrlClick(item.url) })
+            if (history.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No history found", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Button(
+                        onClick = onClearHistory,
+                        modifier = Modifier.padding(bottom = 8.dp).align(Alignment.End),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Clear History")
+                    }
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(history) { item ->
+                            ListItem(
+                                headlineContent = { Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                supportingContent = { Text(item.url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                leadingContent = { Icon(Icons.Rounded.History, contentDescription = null) },
+                                modifier = Modifier.clickable { onUrlClick(item.url) }
+                            )
+                        }
                     }
                 }
             }
