@@ -195,6 +195,67 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
         updateCurrentTab { it.copy(title = title) }
     }
 
+    fun updatePageInfo(webView: WebView) {
+        val url = webView.url ?: return
+        val isSecure = url.startsWith("https")
+        
+        val js = "(function() { " +
+                "const cookies = document.cookie ? document.cookie.split(';').length : 0; " +
+                "if (navigator.storage && navigator.storage.estimate) { " +
+                "  return navigator.storage.estimate().then(est => JSON.stringify({cookies: cookies, storage: est.usage || 0})); " +
+                "} else { " +
+                "  return JSON.stringify({cookies: cookies, storage: 0}); " +
+                "} " +
+                "})()"
+        
+        webView.evaluateJavascript(js) { result ->
+            try {
+                val cleanedJson = if (result != null && result.startsWith("\"") && result.endsWith("\"")) {
+                    result.substring(1, result.length - 1)
+                        .replace("\\\"", "\"")
+                        .replace("\\\\", "\\")
+                } else result ?: "{}"
+                
+                val json = org.json.JSONObject(cleanedJson)
+                val cookies = json.optInt("cookies", 0)
+                val storage = json.optLong("storage", 0)
+                
+                updateCurrentTab { it.copy(
+                    isSecure = isSecure,
+                    cookieCount = cookies,
+                    storageUsage = storage
+                ) }
+            } catch (e: Exception) {
+                updateCurrentTab { it.copy(isSecure = isSecure) }
+            }
+        }
+        
+        viewModelScope.launch {
+            repository.getLastVisit(url).take(1).collect { lastVisit ->
+                updateCurrentTab { it.copy(lastVisitedTime = lastVisit?.timestamp) }
+            }
+        }
+    }
+
+    fun getRelativeTime(timestamp: Long?): String {
+        if (timestamp == null) return "First time visiting this site"
+        val now = System.currentTimeMillis()
+        val diff = now - timestamp
+        
+        return when {
+            diff < 0 -> "Last visited recently"
+            diff < 60000 -> "Last visited just now"
+            diff < 3600000 -> "Last visited ${diff / 60000}m ago"
+            diff < 86400000 -> "Last visited today"
+            diff < 172800000 -> "Last visited yesterday"
+            else -> {
+                val date = java.util.Date(timestamp)
+                val format = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+                "Last visited ${format.format(date)}"
+            }
+        }
+    }
+
     private val _lastUsedFolder = MutableStateFlow("Mobile Bookmarks")
     val lastUsedFolder: StateFlow<String> = _lastUsedFolder.asStateFlow()
 

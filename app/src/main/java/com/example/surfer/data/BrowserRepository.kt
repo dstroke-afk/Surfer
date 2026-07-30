@@ -24,6 +24,16 @@ class BrowserRepository(private val dao: BrowserDao) {
 
     fun isBookmarked(url: String): Flow<Boolean> = dao.isBookmarked(url)
 
+    fun getLastVisit(url: String): Flow<HistoryEntity?> {
+        val hostname = try {
+            val uri = android.net.Uri.parse(url)
+            uri.host ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+        return dao.getLastVisit("%$hostname%")
+    }
+
     fun getBookmarkByUrl(url: String): Flow<BookmarkEntity?> = dao.getBookmarkByUrl(url)
 
     fun getAllFolders(): Flow<List<String>> = dao.getAllFolders()

@@ -107,6 +107,7 @@ fun BrowserScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showHistoryBookmarks by remember { mutableStateOf(false) }
     var showTabSwitcher by remember { mutableStateOf(false) }
+    var showPageInfo by remember { mutableStateOf(false) }
     var sslErrorToHandle by remember { mutableStateOf<Pair<SslErrorHandler, SslError>?>(null) }
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -220,9 +221,14 @@ fun BrowserScreen(
                                                 ) {
                                                     Icon(
                                                         if (url.startsWith("https")) Icons.Rounded.Lock else Icons.Rounded.Info,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(16.dp),
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        contentDescription = "Page Info",
+                                                        modifier = Modifier
+                                                            .size(16.dp)
+                                                            .clickable { showPageInfo = true },
+                                                        tint = if (url.startsWith("https")) 
+                                                            MaterialTheme.colorScheme.primary 
+                                                        else 
+                                                            MaterialTheme.colorScheme.error
                                                     )
                                                     Spacer(modifier = Modifier.width(8.dp))
                                                     Box(modifier = Modifier.weight(1f)) {
@@ -411,7 +417,10 @@ fun BrowserScreen(
                             onSslError = { handler, error ->
                                 sslErrorToHandle = handler to error
                             },
-                            onCaptureSnapshot = { viewModel.captureSnapshot(it) }
+                            onCaptureSnapshot = { 
+                                viewModel.captureSnapshot(it)
+                                viewModel.updatePageInfo(it)
+                            }
                         )
                     }
                 }
@@ -467,6 +476,18 @@ fun BrowserScreen(
         }
     }
 
+    if (showPageInfo) {
+        ModalBottomSheet(
+            onDismissRequest = { showPageInfo = false }
+        ) {
+            PageInfoContent(
+                tab = currentTab,
+                relativeTime = viewModel.getRelativeTime(currentTab.lastVisitedTime),
+                onDismiss = { showPageInfo = false }
+            )
+        }
+    }
+
     sslErrorToHandle?.let { (handler, error) ->
         AlertDialog(
             onDismissRequest = { 
@@ -493,6 +514,69 @@ fun BrowserScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun PageInfoContent(
+    tab: BrowserTabState,
+    relativeTime: String,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .padding(bottom = 32.dp)
+    ) {
+        Text(
+            text = "Page Info",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Connection Security
+        ListItem(
+            headlineContent = { Text(if (tab.isSecure == true) "Connection is secure" else "Connection is not secure") },
+            supportingContent = { Text(if (tab.isSecure == true) "Your information (for example, passwords or credit card numbers) is private when it is sent to this site." else "You should not enter any sensitive information on this site (for example, passwords or credit cards), because it could be stolen by attackers.") },
+            leadingContent = {
+                Icon(
+                    if (tab.isSecure == true) Icons.Rounded.Lock else Icons.Rounded.Warning,
+                    contentDescription = null,
+                    tint = if (tab.isSecure == true) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                )
+            }
+        )
+        
+        // Cookies and Site Data
+        val storageMB = String.format(java.util.Locale.US, "%.2f MB", tab.storageUsage / (1024f * 1024f))
+        ListItem(
+            headlineContent = { Text("Cookies and site data") },
+            supportingContent = { Text("${tab.cookieCount} active cookies • $storageMB used") },
+            leadingContent = {
+                Icon(Icons.Rounded.Cookie, contentDescription = null)
+            }
+        )
+        
+        // Last Visited
+        ListItem(
+            headlineContent = { Text("Last visited") },
+            supportingContent = { Text(relativeTime) },
+            leadingContent = {
+                Icon(Icons.Rounded.History, contentDescription = null)
+            }
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text("Done")
+        }
     }
 }
 

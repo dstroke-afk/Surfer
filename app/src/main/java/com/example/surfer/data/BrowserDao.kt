@@ -14,6 +14,9 @@ interface BrowserDao {
     @Query("DELETE FROM history")
     suspend fun clearHistory()
 
+    @Query("SELECT * FROM history WHERE url LIKE :hostPattern ORDER BY timestamp DESC LIMIT 1 OFFSET 1")
+    fun getLastVisit(hostPattern: String): Flow<HistoryEntity?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBookmark(bookmark: BookmarkEntity)
 

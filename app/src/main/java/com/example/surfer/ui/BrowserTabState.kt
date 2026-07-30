@@ -18,5 +18,9 @@ data class BrowserTabState(
     val isSuspended: Boolean = false,
     val isHomePage: Boolean = true,
     val groupId: String? = null,
+    val isSecure: Boolean? = null,
+    val cookieCount: Int = 0,
+    val storageUsage: Long = 0,
+    val lastVisitedTime: Long? = null,
     @Transient val thumbnail: Bitmap? = null
 )
