@@ -39,7 +39,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
+import com.example.surfer.data.RssItem
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +58,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.surfer.data.SearchEngine
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.window.core.layout.WindowWidthSizeClass
@@ -91,6 +95,7 @@ fun BrowserScreen(
     viewModel: BrowserViewModel,
     onEditBookmark: (String) -> Unit,
     onNavigateToDownloads: () -> Unit,
+    onNavigateToRss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val browserState by viewModel.state.collectAsState()
@@ -392,6 +397,14 @@ fun BrowserScreen(
                                             },
                                             leadingIcon = { Icon(Icons.Rounded.Download, contentDescription = null) }
                                         )
+                                        DropdownMenuItem(
+                                            text = { Text("RSS Feeds") },
+                                            onClick = {
+                                                onNavigateToRss()
+                                                showMenu = false
+                                            },
+                                            leadingIcon = { Icon(Icons.Rounded.RssFeed, contentDescription = null) }
+                                        )
                                     }
                                 }
                             }
@@ -418,12 +431,26 @@ fun BrowserScreen(
                 if (currentTab.isHomePage) {
                     val selectedEngine by viewModel.selectedSearchEngine.collectAsStateWithLifecycle()
                     val isExpanded by viewModel.isEnginePickerExpanded.collectAsStateWithLifecycle()
+                    val rssViewModel: RssViewModel = viewModel()
+                    val feeds by rssViewModel.feeds.collectAsStateWithLifecycle()
+                    
+                    LaunchedEffect(Unit) {
+                        if (feeds.isEmpty()) {
+                            rssViewModel.fetchFeed("Hacker News", "https://news.ycombinator.com/rss")
+                            rssViewModel.fetchFeed("TechCrunch", "https://techcrunch.com/feed/")
+                        }
+                    }
+                    
+                    val newsItems = feeds.values.flatMap { it.items }.sortedByDescending { it.pubDate }.take(10)
+
                     HomePage(
                         selectedEngine = selectedEngine,
                         isEnginePickerExpanded = isExpanded,
                         onEngineSelected = { viewModel.selectSearchEngine(it) },
                         onExpandPicker = { viewModel.setEnginePickerExpanded(it) },
                         onSearch = { viewModel.navigateTo(it) },
+                        newsItems = newsItems,
+                        onNewsItemClick = { viewModel.navigateTo(it) },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -491,6 +518,9 @@ fun BrowserScreen(
                     showTabSwitcher = false
                 },
                 onTabClose = { index ->
+                    if (tabs.size == 1) {
+                        showTabSwitcher = false
+                    }
                     viewModel.removeTab(index)
                 },
                 onNewTab = { isIncognito ->
@@ -925,6 +955,8 @@ fun HomePage(
     onEngineSelected: (SearchEngine) -> Unit,
     onExpandPicker: (Boolean) -> Unit,
     onSearch: (String) -> Unit,
+    newsItems: List<RssItem>,
+    onNewsItemClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -981,6 +1013,68 @@ fun HomePage(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(name, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+        }
+        
+        if (newsItems.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(32.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recommended for you",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            newsItems.forEach { item ->
+                NewsCard(item = item, onClick = { onNewsItemClick(item.link) })
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun NewsCard(item: RssItem, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (item.pubDate != null) {
+                    Text(
+                        text = item.pubDate,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (item.thumbnailUrl != null) {
+                Spacer(modifier = Modifier.width(12.dp))
+                AsyncImage(
+                    model = item.thumbnailUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop
+                )
             }
         }
     }

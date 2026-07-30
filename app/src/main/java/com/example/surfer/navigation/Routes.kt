@@ -14,3 +14,7 @@ data class FolderSelectionRoute(val currentFolder: String) : NavKey
 
 @Serializable
 object DownloadsRoute : NavKey
+
+@Serializable
+object RssRoute : NavKey
+
