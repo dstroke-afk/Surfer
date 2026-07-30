@@ -22,5 +22,6 @@ data class BrowserTabState(
     val cookieCount: Int = 0,
     val storageUsage: Long = 0,
     val lastVisitedTime: Long? = null,
+    val isIncognito: Boolean = false,
     @Transient val thumbnail: Bitmap? = null
 )

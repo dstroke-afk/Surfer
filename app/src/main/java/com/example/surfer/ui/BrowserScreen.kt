@@ -66,8 +66,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import androidx.compose.material.icons.rounded.Tab
-import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.ui.zIndex
 import com.example.surfer.ui.theme.SurferTheme
 
@@ -75,7 +73,6 @@ import com.example.surfer.ui.theme.SurferTheme
 @Composable
 fun BrowserScreenPreview() {
     // Note: This preview won't fully work without a real repository, but we can't easily mock it here.
-    // For now, we'll keep it as a placeholder or remove it if it blocks the build.
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -139,7 +136,6 @@ fun BrowserScreen(
         layoutType = if (isExpanded) NavigationSuiteType.NavigationRail else NavigationSuiteType.None,
         navigationSuiteItems = {
             if (isExpanded) {
-                // Defensive guard for index and size
                 val safeIndex = if (tabs.isNotEmpty()) selectedTabIndex.coerceAtMost(tabs.size - 1) else 0
                 
                 tabs.forEachIndexed { index, tab ->
@@ -189,7 +185,7 @@ fun BrowserScreen(
 
                                 // Pill-shaped Omnibox
                                 Surface(
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    color = if (currentTab.isIncognito) Color(0xFF202124) else MaterialTheme.colorScheme.surfaceVariant,
                                     shape = CircleShape,
                                     modifier = Modifier
                                         .weight(1f)
@@ -202,19 +198,6 @@ fun BrowserScreen(
                                             .fillMaxSize()
                                             .padding(horizontal = 12.dp)
                                     ) {
-                                        Icon(
-                                            if (url.startsWith("https")) Icons.Rounded.Lock else Icons.Rounded.Info,
-                                            contentDescription = "Page Info",
-                                            modifier = Modifier
-                                                .size(16.dp)
-                                                .clickable { showPageInfo = true },
-                                            tint = if (url.startsWith("https")) 
-                                                MaterialTheme.colorScheme.primary 
-                                            else 
-                                                MaterialTheme.colorScheme.error
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        
                                         // The actual text field isolated for correct scrolling
                                         Box(
                                             modifier = Modifier.weight(1f),
@@ -226,7 +209,7 @@ fun BrowserScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 singleLine = true,
                                                 textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                                 ),
                                                 keyboardOptions = KeyboardOptions(
                                                     imeAction = ImeAction.Go,
@@ -239,13 +222,13 @@ fun BrowserScreen(
                                                         focusManager.clearFocus()
                                                     }
                                                 ),
-                                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                                cursorBrush = SolidColor(if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary),
                                                 decorationBox = { innerTextField ->
                                                     if (textFieldValue.text.isEmpty()) {
                                                         Text(
                                                             "Search or type URL",
                                                             style = MaterialTheme.typography.bodyMedium,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                            color = if (currentTab.isIncognito) Color.Gray else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis
                                                         )
@@ -260,7 +243,7 @@ fun BrowserScreen(
                                             CircularProgressIndicator(
                                                 modifier = Modifier.size(16.dp),
                                                 strokeWidth = 2.dp,
-                                                color = MaterialTheme.colorScheme.primary
+                                                color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
@@ -293,7 +276,7 @@ fun BrowserScreen(
                                     }
                                 }
 
-                                // Menu button (Restored to top right)
+                                // Menu button
                                 Box {
                                     IconButton(onClick = { showMenu = true }) {
                                         Icon(Icons.Rounded.MoreVert, contentDescription = "Menu")
@@ -312,8 +295,8 @@ fun BrowserScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            IconButton(onClick = { webView?.goBack(); showMenu = false }, enabled = canGoBack) {
-                                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                                            IconButton(onClick = { webView?.goForward(); showMenu = false }, enabled = currentTab.canGoForward) {
+                                                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Forward")
                                             }
                                             IconButton(onClick = { viewModel.toggleBookmark(); showMenu = false }) {
                                                 Icon(
@@ -325,7 +308,6 @@ fun BrowserScreen(
                                             val context = androidx.compose.ui.platform.LocalContext.current
                                             IconButton(onClick = { 
                                                 webView?.evaluateJavascript("(function() { return document.documentElement.outerHTML; })();") { html ->
-                                                    // Remove extra quotes and escape characters from evaluateJavascript result
                                                     val cleanedHtml = if (html != null && html.startsWith("\"") && html.endsWith("\"")) {
                                                         html.substring(1, html.length - 1)
                                                             .replace("\\u003C", "<")
@@ -338,8 +320,8 @@ fun BrowserScreen(
                                             }) {
                                                 Icon(Icons.Rounded.Download, contentDescription = "Download as HTML")
                                             }
-                                            IconButton(onClick = { /* Info trigger */ showMenu = false }) {
-                                                Icon(Icons.Rounded.Info, contentDescription = "Info")
+                                            IconButton(onClick = { showPageInfo = true; showMenu = false }) {
+                                                Icon(Icons.Rounded.Info, contentDescription = "Page Info")
                                             }
                                             IconButton(onClick = { webView?.reload(); showMenu = false }) {
                                                 Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
@@ -349,44 +331,51 @@ fun BrowserScreen(
                                         HorizontalDivider()
                                         
                                         DropdownMenuItem(
-                                            text = { Text("History & Bookmarks") },
+                                            text = { Text("New Tab") },
+                                            onClick = {
+                                                viewModel.addNewTab()
+                                                showMenu = false
+                                            },
+                                            leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("New Incognito Tab") },
+                                            onClick = {
+                                                viewModel.addNewIncognitoTab()
+                                                showMenu = false
+                                            },
+                                            leadingIcon = { Icon(Icons.Rounded.PrivacyTip, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Add tab to group") },
+                                            onClick = {
+                                                showTabSwitcher = true
+                                                showMenu = false
+                                            },
+                                            leadingIcon = { Icon(Icons.Rounded.Layers, contentDescription = null) }
+                                        )
+                                        HorizontalDivider()
+                                        DropdownMenuItem(
+                                            text = { Text("History") },
                                             onClick = {
                                                 showHistoryBookmarks = true
                                                 showMenu = false
                                             },
-                                            leadingIcon = {
-                                                Icon(Icons.Rounded.History, contentDescription = null)
-                                            }
+                                            leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text("Desktop Site") },
+                                            text = { Text("Bookmarks") },
                                             onClick = {
-                                                viewModel.toggleDesktopSite()
+                                                showHistoryBookmarks = true
                                                 showMenu = false
                                             },
-                                            trailingIcon = {
-                                                Checkbox(
-                                                    checked = currentTab.isDesktopSite,
-                                                    onCheckedChange = null
-                                                )
-                                            }
-                                        )
-                                        HorizontalDivider()
-                                        DropdownMenuItem(
-                                            text = { Text("Refresh") },
-                                            onClick = {
-                                                webView?.reload()
-                                                showMenu = false
-                                            },
-                                            leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
+                                            leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) }
                                         )
                                     }
                                 }
                             }
                         },
-                        actions = {
-                            // Empty actions as we handle everything in the title row
-                        }
+                        actions = {}
                     )
                     
                     if (isLoading) {
@@ -416,6 +405,7 @@ fun BrowserScreen(
                             url = currentTab.url,
                             isDesktopSite = currentTab.isDesktopSite,
                             isSuspended = currentTab.isSuspended,
+                            isIncognito = currentTab.isIncognito,
                             onWebViewCreated = { webView = it },
                             onProgressChanged = { viewModel.onProgressChange(it) },
                             onLoadingStateChanged = { viewModel.onLoadingStateChange(it) },
@@ -544,13 +534,10 @@ fun PageInfoContent(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
-        
         Spacer(modifier = Modifier.height(24.dp))
-        
-        // Connection Security
         ListItem(
             headlineContent = { Text(if (tab.isSecure == true) "Connection is secure" else "Connection is not secure") },
-            supportingContent = { Text(if (tab.isSecure == true) "Your information (for example, passwords or credit card numbers) is private when it is sent to this site." else "You should not enter any sensitive information on this site (for example, passwords or credit cards), because it could be stolen by attackers.") },
+            supportingContent = { Text(if (tab.isSecure == true) "Your information is private when it is sent to this site." else "You should not enter any sensitive information on this site.") },
             leadingContent = {
                 Icon(
                     if (tab.isSecure == true) Icons.Rounded.Lock else Icons.Rounded.Warning,
@@ -559,28 +546,18 @@ fun PageInfoContent(
                 )
             }
         )
-        
-        // Cookies and Site Data
         val storageMB = String.format(java.util.Locale.US, "%.2f MB", tab.storageUsage / (1024f * 1024f))
         ListItem(
             headlineContent = { Text("Cookies and site data") },
             supportingContent = { Text("${tab.cookieCount} active cookies • $storageMB used") },
-            leadingContent = {
-                Icon(Icons.Rounded.Cookie, contentDescription = null)
-            }
+            leadingContent = { Icon(Icons.Rounded.Cookie, contentDescription = null) }
         )
-        
-        // Last Visited
         ListItem(
             headlineContent = { Text("Last visited") },
             supportingContent = { Text(relativeTime) },
-            leadingContent = {
-                Icon(Icons.Rounded.History, contentDescription = null)
-            }
+            leadingContent = { Icon(Icons.Rounded.History, contentDescription = null) }
         )
-        
         Spacer(modifier = Modifier.height(16.dp))
-        
         Button(
             onClick = onDismiss,
             modifier = Modifier.align(Alignment.End)
@@ -604,34 +581,74 @@ fun TabSwitcherContent(
     var draggedTabId by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var selectedGroupForDetail by remember { mutableStateOf<TabGroup?>(null) }
+    var switcherMode by remember { mutableIntStateOf(0) } // 0: Normal, 1: Incognito, 2: Synced
 
-    // Map tab IDs to their current positions in the grid for drag detection
     val itemPositions = remember { mutableStateMapOf<String, Pair<Offset, IntSize>>() }
 
-    val topLevelItems = remember(tabs, groups) {
-        val groupedTabIds = groups.flatMap { it.tabIds }.toSet()
-        val ungroupedTabs = tabs.filter { it.id !in groupedTabIds }
-        (ungroupedTabs.map { it to null } + groups.map { null to it }).sortedBy { 
-            val id = it.first?.id ?: it.second?.id ?: ""
-            // Sort by earliest tab in item
+    val filteredTabs = remember(tabs, switcherMode) {
+        when (switcherMode) {
+            0 -> tabs.filter { !it.isIncognito }
+            1 -> tabs.filter { it.isIncognito }
+            else -> emptyList()
+        }
+    }
+
+    val topLevelItems = remember(filteredTabs, groups, switcherMode) {
+        if (switcherMode == 2) return@remember emptyList()
+        val filteredTabIds = filteredTabs.map { it.id }.toSet()
+        val relevantGroups = groups.filter { it.tabIds.any { id -> id in filteredTabIds } }
+        val groupedTabIds = relevantGroups.flatMap { it.tabIds }.toSet()
+        val ungroupedTabs = filteredTabs.filter { it.id !in groupedTabIds }
+        (ungroupedTabs.map { it to null } + relevantGroups.map { null to it }).sortedBy { 
             val firstTabId = it.first?.id ?: it.second?.tabIds?.firstOrNull() ?: ""
             tabs.indexOfFirst { t -> t.id == firstTabId }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            // Header Bar
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { switcherMode = 0 }) {
+                    Icon(
+                        Icons.Rounded.Tab, 
+                        contentDescription = "Normal Tabs",
+                        tint = if (switcherMode == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(32.dp))
+                IconButton(onClick = { switcherMode = 1 }) {
+                    Icon(
+                        Icons.Rounded.PrivacyTip, 
+                        contentDescription = "Incognito Tabs",
+                        tint = if (switcherMode == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(32.dp))
+                IconButton(onClick = { switcherMode = 2 }) {
+                    Icon(
+                        Icons.Rounded.Devices, 
+                        contentDescription = "Synced Tabs",
+                        tint = if (switcherMode == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${tabs.size} Tabs",
+                    text = when(switcherMode) {
+                        0 -> "${filteredTabs.size} Tabs"
+                        1 -> "${filteredTabs.size} Private Tabs"
+                        else -> "Synced Devices"
+                    },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -642,87 +659,76 @@ fun TabSwitcherContent(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(topLevelItems) { item ->
-                    val tab = item.first
-                    val group = item.second
-                    val itemId = tab?.id ?: group?.id ?: ""
-
-                    Box(
-                        modifier = Modifier
-                            .onGloballyPositioned { coordinates ->
-                                itemPositions[itemId] = coordinates.positionInWindow() to coordinates.size
-                            }
-                            .pointerInput(itemId) {
-                                if (tab != null) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = { offset ->
-                                            draggedTabId = tab.id
-                                            dragOffset = Offset.Zero
-                                        },
-                                        onDragEnd = {
-                                            draggedTabId?.let { draggedId ->
-                                                val absoluteDragPos = itemPositions[draggedId]?.first?.plus(dragOffset) ?: Offset.Zero
-                                                
-                                                // Check for overlap with other items
-                                                itemPositions.forEach { (targetId, posAndSize) ->
-                                                    if (targetId != draggedId) {
-                                                        val (pos, size) = posAndSize
-                                                        if (absoluteDragPos.x > pos.x && absoluteDragPos.x < pos.x + size.width &&
-                                                            absoluteDragPos.y > pos.y && absoluteDragPos.y < pos.y + size.height) {
-                                                            onMergeTabs(draggedId, targetId)
+            if (switcherMode == 2) {
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text("No synced devices found", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(topLevelItems) { item ->
+                        val tab = item.first
+                        val group = item.second
+                        val itemId = tab?.id ?: group?.id ?: ""
+                        Box(
+                            modifier = Modifier
+                                .onGloballyPositioned { coordinates ->
+                                    itemPositions[itemId] = coordinates.positionInWindow() to coordinates.size
+                                }
+                                .pointerInput(itemId) {
+                                    if (tab != null) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = { draggedTabId = tab.id; dragOffset = Offset.Zero },
+                                            onDragEnd = {
+                                                draggedTabId?.let { draggedId ->
+                                                    val absoluteDragPos = itemPositions[draggedId]?.first?.plus(dragOffset) ?: Offset.Zero
+                                                    itemPositions.forEach { (targetId, posAndSize) ->
+                                                        if (targetId != draggedId) {
+                                                            val (pos, size) = posAndSize
+                                                            if (absoluteDragPos.x > pos.x && absoluteDragPos.x < pos.x + size.width &&
+                                                                absoluteDragPos.y > pos.y && absoluteDragPos.y < pos.y + size.height) {
+                                                                onMergeTabs(draggedId, targetId)
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-                                            draggedTabId = null
-                                        },
-                                        onDragCancel = { draggedTabId = null },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            dragOffset += dragAmount
-                                        }
-                                    )
+                                                draggedTabId = null
+                                            },
+                                            onDragCancel = { draggedTabId = null },
+                                            onDrag = { change, dragAmount -> change.consume(); dragOffset += dragAmount }
+                                        )
+                                    }
                                 }
+                                .alpha(if (draggedTabId == itemId) 0.5f else 1.0f)
+                        ) {
+                            if (tab != null) {
+                                TabCard(
+                                    tab = tab,
+                                    isSelected = tabs.indexOf(tab) == selectedTabIndex,
+                                    onSelect = { onTabSelect(tabs.indexOf(tab)) },
+                                    onClose = { onTabClose(tabs.indexOf(tab)) }
+                                )
+                            } else if (group != null) {
+                                GroupCard(group = group, tabs = tabs, onClick = { selectedGroupForDetail = group })
                             }
-                            .alpha(if (draggedTabId == itemId) 0.5f else 1.0f)
-                    ) {
-                        if (tab != null) {
-                            TabCard(
-                                tab = tab,
-                                isSelected = tabs.indexOf(tab) == selectedTabIndex,
-                                onSelect = { onTabSelect(tabs.indexOf(tab)) },
-                                onClose = { onTabClose(tabs.indexOf(tab)) }
-                            )
-                        } else if (group != null) {
-                            GroupCard(
-                                group = group,
-                                tabs = tabs,
-                                onClick = { selectedGroupForDetail = group }
-                            )
                         }
                     }
                 }
             }
         }
 
-        // Dragging overlay
         draggedTabId?.let { id ->
             val draggedTab = tabs.find { it.id == id }
             if (draggedTab != null) {
                 val startPos = itemPositions[id]?.first ?: Offset.Zero
                 Box(
                     modifier = Modifier
-                        .offset(
-                            x = (startPos.x + dragOffset.x).pxToDp(),
-                            y = (startPos.y + dragOffset.y).pxToDp()
-                        )
-                        .size(150.dp) // Approximate card size
+                        .offset(x = (startPos.x + dragOffset.x).pxToDp(), y = (startPos.y + dragOffset.y).pxToDp())
+                        .size(150.dp)
                         .zIndex(100f)
                 ) {
                     TabCard(tab = draggedTab, isSelected = false, onSelect = {}, onClose = {})
@@ -731,14 +737,9 @@ fun TabSwitcherContent(
         }
         
         selectedGroupForDetail?.let { group ->
-            Popup(
-                onDismissRequest = { selectedGroupForDetail = null },
-                properties = PopupProperties(focusable = true)
-            ) {
+            Popup(onDismissRequest = { selectedGroupForDetail = null }, properties = PopupProperties(focusable = true)) {
                 Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 8.dp
@@ -747,17 +748,12 @@ fun TabSwitcherContent(
                         var groupName by remember { mutableStateOf(group.name) }
                         OutlinedTextField(
                             value = groupName,
-                            onValueChange = { 
-                                groupName = it
-                                onRenameGroup(group.id, it)
-                            },
+                            onValueChange = { groupName = it; onRenameGroup(group.id, it) },
                             modifier = Modifier.fillMaxWidth(),
                             textStyle = MaterialTheme.typography.titleMedium,
                             label = { Text("Group Name") }
                         )
-                        
                         Spacer(modifier = Modifier.height(16.dp))
-                        
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
                             modifier = Modifier.weight(1f),
@@ -769,19 +765,12 @@ fun TabSwitcherContent(
                                 TabCard(
                                     tab = groupTab,
                                     isSelected = tabs.indexOf(groupTab) == selectedTabIndex,
-                                    onSelect = { 
-                                        onTabSelect(tabs.indexOf(groupTab))
-                                        selectedGroupForDetail = null
-                                    },
+                                    onSelect = { onTabSelect(tabs.indexOf(groupTab)); selectedGroupForDetail = null },
                                     onClose = { onTabClose(tabs.indexOf(groupTab)) }
                                 )
                             }
                         }
-                        
-                        Button(
-                            onClick = { selectedGroupForDetail = null },
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
+                        Button(onClick = { selectedGroupForDetail = null }, modifier = Modifier.align(Alignment.End)) {
                             Text("Done")
                         }
                     }
@@ -792,91 +781,29 @@ fun TabSwitcherContent(
 }
 
 @Composable
-fun TabCard(
-    tab: BrowserTabState,
-    isSelected: Boolean,
-    onSelect: () -> Unit,
-    onClose: () -> Unit
-) {
+fun TabCard(tab: BrowserTabState, isSelected: Boolean, onSelect: () -> Unit, onClose: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.8f)
-            .border(
-                width = if (isSelected) 2.dp else 0.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                shape = MaterialTheme.shapes.medium
-            )
+        modifier = Modifier.fillMaxWidth().aspectRatio(0.8f)
+            .border(width = if (isSelected) 2.dp else 0.dp, color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent, shape = MaterialTheme.shapes.medium)
             .clickable { onSelect() },
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        colors = CardDefaults.cardColors(containerColor = if (tab.isIncognito) Color(0xFF202124) else MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = tab.title,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        Icons.Rounded.Close,
-                        contentDescription = "Close Tab",
-                        modifier = Modifier.size(16.dp)
-                    )
+        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(text = tab.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f), color = if (tab.isIncognito) Color.White else Color.Unspecified)
+                IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close Tab", modifier = Modifier.size(16.dp), tint = if (tab.isIncognito) Color.White else Color.Unspecified)
                 }
             }
-            
             Spacer(modifier = Modifier.height(4.dp))
-            
-            Text(
-                text = tab.url,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-            
+            Text(text = tab.url, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = (if (tab.isIncognito) Color.Gray else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.7f))
             Spacer(modifier = Modifier.height(8.dp))
-            
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .background(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.shapes.small
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(if (tab.isIncognito) Color(0xFF35363A) else MaterialTheme.colorScheme.surface, MaterialTheme.shapes.small), contentAlignment = Alignment.Center) {
                 if (tab.thumbnail != null) {
-                    Image(
-                        bitmap = tab.thumbnail.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.small)
-                    )
+                    Image(bitmap = tab.thumbnail.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.small))
                 } else {
-                    Icon(
-                        Icons.Rounded.Web,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                        modifier = Modifier.size(48.dp)
-                    )
+                    Icon(Icons.Rounded.Web, contentDescription = null, tint = (if (tab.isIncognito) Color.Gray else MaterialTheme.colorScheme.outline).copy(alpha = 0.3f), modifier = Modifier.size(48.dp))
                 }
             }
         }
@@ -884,192 +811,74 @@ fun TabCard(
 }
 
 @Composable
-fun GroupCard(
-    group: TabGroup,
-    tabs: List<BrowserTabState>,
-    onClick: () -> Unit
-) {
+fun GroupCard(group: TabGroup, tabs: List<BrowserTabState>, onClick: () -> Unit) {
+    val isIncognito = tabs.find { it.id == group.tabIds.firstOrNull() }?.isIncognito == true
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.8f)
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().aspectRatio(0.8f).clickable { onClick() },
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+        colors = CardDefaults.cardColors(containerColor = if (isIncognito) Color(0xFF202124) else MaterialTheme.colorScheme.secondaryContainer)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Layers, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Layers, contentDescription = null, modifier = Modifier.size(16.dp), tint = if (isIncognito) Color.White else Color.Unspecified)
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = group.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text(text = group.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (isIncognito) Color.White else Color.Unspecified)
             }
-            
             Spacer(modifier = Modifier.height(8.dp))
-            
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .background(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.shapes.small
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                // Stack of thumbnails
+            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(if (isIncognito) Color(0xFF35363A) else MaterialTheme.colorScheme.surface, MaterialTheme.shapes.small), contentAlignment = Alignment.Center) {
                 val groupTabs = tabs.filter { it.id in group.tabIds }.take(4)
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.fillMaxSize().padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    userScrollEnabled = false
-                ) {
+                LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), userScrollEnabled = false) {
                     items(groupTabs) { gTab ->
                         if (gTab.thumbnail != null) {
-                            Image(
-                                bitmap = gTab.thumbnail.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.extraSmall)
-                            )
+                            Image(bitmap = gTab.thumbnail.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.extraSmall))
                         } else {
-                            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+                            Box(modifier = Modifier.fillMaxSize().background(if (isIncognito) Color.DarkGray else MaterialTheme.colorScheme.surfaceVariant))
                         }
                     }
                 }
             }
-            
-            Text(
-                text = "${group.tabIds.size} tabs",
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+            Text(text = "${group.tabIds.size} tabs", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp), color = if (isIncognito) Color.Gray else Color.Unspecified)
         }
     }
 }
 
 @Composable
 fun Offset.pxToDp() = with(androidx.compose.ui.platform.LocalDensity.current) { this@pxToDp.y.toDp() }
-// Simple helper - actually needs x and y
 @Composable
 fun Float.pxToDp() = with(androidx.compose.ui.platform.LocalDensity.current) { this@pxToDp.toDp() }
 
 @Composable
-fun HomePage(
-    onSearch: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
+fun HomePage(onSearch: (String) -> Unit, modifier: Modifier = Modifier) {
     val scrollState = rememberScrollState()
-    Column(
-        modifier = modifier
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(modifier = modifier.verticalScroll(scrollState).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(modifier = Modifier.height(48.dp))
-        
-        // Google-style Logo
-        Text(
-            text = "Google",
-            style = MaterialTheme.typography.displayLarge.copy(
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        )
-        
+        Text(text = "Google", style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground))
         Spacer(modifier = Modifier.height(32.dp))
-        
-        // Large Search Box
         var searchText by remember { mutableStateOf("") }
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 2.dp
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Rounded.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Surface(modifier = Modifier.fillMaxWidth().height(56.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, tonalElevation = 2.dp) {
+            Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 BasicTextField(
                     value = searchText,
                     onValueChange = { searchText = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 12.dp),
+                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { onSearch(searchText) }),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { innerTextField ->
-                        innerTextField()
-                    }
+                    decorationBox = { it() }
                 )
             }
         }
-        
         Spacer(modifier = Modifier.height(24.dp))
-        
-        // Shortcuts Grid (Renamed from Frequently Visited)
-        val shortcuts = listOf(
-            "Google" to "https://www.google.com",
-            "YouTube" to "https://www.youtube.com",
-            "Amazon" to "https://www.amazon.com",
-            "Wikipedia" to "https://www.wikipedia.org"
-        )
-        
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(100.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            userScrollEnabled = false
-        ) {
+        val shortcuts = listOf("Google" to "https://www.google.com", "YouTube" to "https://www.youtube.com", "Amazon" to "https://www.amazon.com", "Wikipedia" to "https://www.wikipedia.org")
+        LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.fillMaxWidth().height(100.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), userScrollEnabled = false) {
             items(shortcuts) { (name, url) ->
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onSearch(url) }.padding(4.dp)
-                ) {
-                    Surface(
-                        modifier = Modifier.size(48.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onSearch(url) }.padding(4.dp)) {
+                    Surface(modifier = Modifier.size(48.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                when(name) {
-                                    "Google" -> Icons.Rounded.Search
-                                    "YouTube" -> Icons.Rounded.PlayArrow
-                                    "Amazon" -> Icons.Rounded.ShoppingBag
-                                    else -> Icons.Rounded.Language
-                                },
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            Icon(when(name) { "Google" -> Icons.Rounded.Search; "YouTube" -> Icons.Rounded.PlayArrow; "Amazon" -> Icons.Rounded.ShoppingBag; else -> Icons.Rounded.Language }, contentDescription = null, modifier = Modifier.size(24.dp))
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -1081,12 +890,7 @@ fun HomePage(
 }
 
 @Composable
-fun HistoryBookmarksContent(
-    history: List<com.example.surfer.data.HistoryEntity>,
-    bookmarks: List<com.example.surfer.data.BookmarkEntity>,
-    onUrlClick: (String) -> Unit,
-    onClearHistory: () -> Unit
-) {
+fun HistoryBookmarksContent(history: List<com.example.surfer.data.HistoryEntity>, bookmarks: List<com.example.surfer.data.BookmarkEntity>, onUrlClick: (String) -> Unit, onClearHistory: () -> Unit) {
     var selectedTab by remember { mutableStateOf(0) }
     Column {
         TabRow(selectedTabIndex = selectedTab) {
@@ -1096,29 +900,15 @@ fun HistoryBookmarksContent(
         if (selectedTab == 0) {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(bookmarks) { bookmark ->
-                    ListItem(
-                        headlineContent = { Text(bookmark.title, maxLines = 1) },
-                        supportingContent = { Text(bookmark.url, maxLines = 1) },
-                        modifier = Modifier.clickable { onUrlClick(bookmark.url) }
-                    )
+                    ListItem(headlineContent = { Text(bookmark.title, maxLines = 1) }, supportingContent = { Text(bookmark.url, maxLines = 1) }, modifier = Modifier.clickable { onUrlClick(bookmark.url) })
                 }
             }
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
-                Button(
-                    onClick = onClearHistory,
-                    modifier = Modifier.padding(8.dp).align(Alignment.End),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Clear History")
-                }
+                Button(onClick = onClearHistory, modifier = Modifier.padding(8.dp).align(Alignment.End), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Clear History") }
                 LazyColumn {
                     items(history) { item ->
-                        ListItem(
-                            headlineContent = { Text(item.title, maxLines = 1) },
-                            supportingContent = { Text(item.url, maxLines = 1) },
-                            modifier = Modifier.clickable { onUrlClick(item.url) }
-                        )
+                        ListItem(headlineContent = { Text(item.title, maxLines = 1) }, supportingContent = { Text(item.url, maxLines = 1) }, modifier = Modifier.clickable { onUrlClick(item.url) })
                     }
                 }
             }
@@ -1132,6 +922,7 @@ fun WebViewContainer(
     url: String,
     isDesktopSite: Boolean,
     isSuspended: Boolean,
+    isIncognito: Boolean,
     onWebViewCreated: (WebView) -> Unit,
     onProgressChanged: (Int) -> Unit,
     onLoadingStateChanged: (Boolean) -> Unit,
@@ -1168,6 +959,11 @@ fun WebViewContainer(
                     builtInZoomControls = true
                     displayZoomControls = false
                     allowFileAccess = true
+                    if (isIncognito) {
+                        databaseEnabled = false
+                        domStorageEnabled = true // Still need DOM storage for many sites
+                        cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                    }
                 }
                 
                 webViewClient = object : WebViewClient() {
@@ -1186,23 +982,11 @@ fun WebViewContainer(
                         view?.let { onCaptureSnapshot(it) }
                     }
 
-                    override fun shouldOverrideUrlLoading(
-                        view: WebView?,
-                        request: WebResourceRequest?
-                    ): Boolean {
-                        return false
-                    }
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = false
 
-                    override fun onReceivedSslError(
-                        view: WebView?,
-                        handler: SslErrorHandler?,
-                        error: SslError?
-                    ) {
-                        if (handler != null && error != null) {
-                            onSslError(handler, error)
-                        } else {
-                            super.onReceivedSslError(view, handler, error)
-                        }
+                    override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                        if (handler != null && error != null) onSslError(handler, error)
+                        else super.onReceivedSslError(view, handler, error)
                     }
                 }
 
@@ -1230,9 +1014,7 @@ fun WebViewContainer(
                     request.setTitle(android.webkit.URLUtil.guessFileName(downloadUrl, contentDisposition, mimetype))
                     request.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                     request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, android.webkit.URLUtil.guessFileName(downloadUrl, contentDisposition, mimetype))
-                    
-                    val dm = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
-                    dm.enqueue(request)
+                    (context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager).enqueue(request)
                     android.widget.Toast.makeText(context, "Download started", android.widget.Toast.LENGTH_SHORT).show()
                 }
 

@@ -35,14 +35,22 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    fun addNewTab(url: String = "https://www.google.com") {
+    fun addNewTab(url: String = "https://www.google.com", isIncognito: Boolean = false) {
         _state.update { currentState ->
-            val newTabs = currentState.tabs + BrowserTabState(url = url, isHomePage = true)
+            val newTabs = currentState.tabs + BrowserTabState(
+                url = url, 
+                isHomePage = true,
+                isIncognito = isIncognito
+            )
             currentState.copy(
                 tabs = newTabs,
                 selectedTabIndex = newTabs.lastIndex
             )
         }
+    }
+
+    fun addNewIncognitoTab() {
+        addNewTab(isIncognito = true)
     }
 
     fun removeTab(index: Int) {
@@ -51,6 +59,12 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
                 val tabToRemove = currentState.tabs[index]
                 val newTabs = currentState.tabs.toMutableList().apply { removeAt(index) }
                 
+                // Check if we just closed the last incognito tab
+                val incognitoCount = newTabs.count { it.isIncognito }
+                if (tabToRemove.isIncognito && incognitoCount == 0) {
+                    cleanupIncognito()
+                }
+
                 // Cleanup groups if necessary
                 val newGroups = if (tabToRemove.groupId != null) {
                     currentState.groups.map { group ->
@@ -123,32 +137,63 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
         updateCurrentTab { it.copy(thumbnail = thumbnail) }
     }
 
-    fun mergeTabs(draggedTabId: String, targetTabId: String) {
+    fun mergeTabs(draggedTabId: String, targetId: String) {
         _state.update { currentState ->
             val draggedTab = currentState.tabs.find { it.id == draggedTabId } ?: return@update currentState
-            val targetTab = currentState.tabs.find { it.id == targetTabId } ?: return@update currentState
-            
-            if (draggedTab.id == targetTab.id) return@update currentState
+            if (draggedTab.id == targetId) return@update currentState
 
             val newGroups = currentState.groups.toMutableList()
             val newTabs = currentState.tabs.map { it.copy() }.toMutableList()
 
-            val targetGroupId = targetTab.groupId
-            val finalGroupId = targetGroupId ?: UUID.randomUUID().toString()
-
-            if (targetGroupId == null) {
-                // Create new group
-                newGroups.add(TabGroup(finalGroupId, "New Group", listOf(targetTab.id, draggedTab.id)))
-                // Update target tab
-                val targetIndex = newTabs.indexOfFirst { it.id == targetTab.id }
-                newTabs[targetIndex] = newTabs[targetIndex].copy(groupId = finalGroupId)
-            } else {
-                // Add to existing group
-                val groupIndex = newGroups.indexOfFirst { it.id == targetGroupId }
-                newGroups[groupIndex] = newGroups[groupIndex].copy(tabIds = (newGroups[groupIndex].tabIds + draggedTab.id).distinct())
+            // Remove from old group if any
+            if (draggedTab.groupId != null) {
+                val oldGroupIndex = newGroups.indexOfFirst { it.id == draggedTab.groupId }
+                if (oldGroupIndex != -1) {
+                    newGroups[oldGroupIndex] = newGroups[oldGroupIndex].copy(
+                        tabIds = newGroups[oldGroupIndex].tabIds.filter { it != draggedTab.id }
+                    )
+                    if (newGroups[oldGroupIndex].tabIds.isEmpty()) {
+                        newGroups.removeAt(oldGroupIndex)
+                    }
+                }
             }
 
-            // Update dragged tab
+            // Check if target is a group
+            val targetGroup = currentState.groups.find { it.id == targetId }
+            
+            val finalGroupId: String
+            if (targetGroup != null) {
+                // Merging into an existing group card
+                finalGroupId = targetId
+                val groupIndex = newGroups.indexOfFirst { it.id == targetId }
+                newGroups[groupIndex] = newGroups[groupIndex].copy(
+                    tabIds = (newGroups[groupIndex].tabIds + draggedTab.id).distinct()
+                )
+            } else {
+                // Check if target is a tab card
+                val targetTab = currentState.tabs.find { it.id == targetId } ?: return@update currentState
+                
+                val targetGroupId = targetTab.groupId
+                finalGroupId = targetGroupId ?: UUID.randomUUID().toString()
+
+                if (targetGroupId == null) {
+                    // Create new group from two tabs
+                    newGroups.add(TabGroup(finalGroupId, "New Group", listOf(targetTab.id, draggedTab.id)))
+                    // Update target tab's group reference
+                    val targetIndex = newTabs.indexOfFirst { it.id == targetTab.id }
+                    newTabs[targetIndex] = newTabs[targetIndex].copy(groupId = finalGroupId)
+                } else {
+                    // Merging into a tab that is already in a group
+                    val groupIndex = newGroups.indexOfFirst { it.id == targetGroupId }
+                    if (groupIndex != -1) {
+                        newGroups[groupIndex] = newGroups[groupIndex].copy(
+                            tabIds = (newGroups[groupIndex].tabIds + draggedTab.id).distinct()
+                        )
+                    }
+                }
+            }
+
+            // Update dragged tab's group reference
             val draggedIndex = newTabs.indexOfFirst { it.id == draggedTab.id }
             newTabs[draggedIndex] = newTabs[draggedIndex].copy(groupId = finalGroupId)
 
@@ -187,7 +232,7 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
 
     fun onTitleChange(title: String) {
         val tab = currentTab.value
-        if (tab != null && title != tab.title && title.isNotBlank() && !tab.url.startsWith("data:")) {
+        if (tab != null && title != tab.title && title.isNotBlank() && !tab.url.startsWith("data:") && !tab.isIncognito) {
             viewModelScope.launch {
                 repository.addHistory(tab.url, title)
             }
@@ -383,6 +428,14 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
             "https://www.google.com/search?q=$trimmed"
         }
         onUrlChange(formattedUrl)
+    }
+
+    private fun cleanupIncognito() {
+        android.webkit.CookieManager.getInstance().flush()
+        // Note: Clearing cookies/cache here might affect other tabs since CookieManager is global.
+        // A better approach for isolated incognito would be multiple profiles (Android 11+),
+        // but for now we follow the instruction to clear data.
+        android.webkit.WebStorage.getInstance().deleteAllData()
     }
 
     companion object {
