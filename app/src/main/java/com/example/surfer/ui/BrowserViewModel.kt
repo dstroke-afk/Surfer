@@ -12,13 +12,18 @@ import com.example.surfer.data.BrowserDatabase
 import com.example.surfer.data.BrowserRepository
 import com.example.surfer.data.DownloadEntity
 import com.example.surfer.data.DownloadStatus
+import com.example.surfer.data.SearchEngine
+import com.example.surfer.data.SearchPreferencesRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() {
+class BrowserViewModel(
+    private val repository: BrowserRepository,
+    private val searchPreferencesRepository: SearchPreferencesRepository
+) : ViewModel() {
     private val _state = MutableStateFlow(BrowserState())
     val state: StateFlow<BrowserState> = _state.asStateFlow()
 
@@ -454,6 +459,23 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
         }
     }
 
+    private val _isEnginePickerExpanded = MutableStateFlow(false)
+    val isEnginePickerExpanded = _isEnginePickerExpanded.asStateFlow()
+
+    val selectedSearchEngine: StateFlow<SearchEngine> = searchPreferencesRepository.selectedSearchEngine
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchEngine.GOOGLE)
+
+    fun setEnginePickerExpanded(expanded: Boolean) {
+        _isEnginePickerExpanded.value = expanded
+    }
+
+    fun selectSearchEngine(engine: SearchEngine) {
+        viewModelScope.launch {
+            searchPreferencesRepository.saveSearchEngine(engine)
+            _isEnginePickerExpanded.value = false
+        }
+    }
+
     fun navigateTo(newUrl: String) {
         val trimmed = newUrl.trim()
         if (trimmed.isEmpty()) return
@@ -472,7 +494,7 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
                 trimmed
             }
         } else {
-            "https://www.google.com/search?q=$trimmed"
+            "${selectedSearchEngine.value.searchUrl}$trimmed"
         }
         onUrlChange(formattedUrl)
     }
@@ -490,8 +512,10 @@ class BrowserViewModel(private val repository: BrowserRepository) : ViewModel() 
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
-                val repository = BrowserRepository(BrowserDatabase.getDatabase(application).browserDao())
-                return BrowserViewModel(repository) as T
+                val database = BrowserDatabase.getDatabase(application)
+                val repository = BrowserRepository(database.browserDao())
+                val searchPreferencesRepository = SearchPreferencesRepository(application)
+                return BrowserViewModel(repository, searchPreferencesRepository) as T
             }
         }
     }

@@ -11,7 +11,12 @@ import android.net.http.SslError
 import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.Language
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,6 +34,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -48,6 +54,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.surfer.data.SearchEngine
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.window.core.layout.WindowWidthSizeClass
 import androidx.compose.foundation.clickable
@@ -408,7 +416,13 @@ fun BrowserScreen(
                     .fillMaxSize()
             ) {
                 if (currentTab.isHomePage) {
+                    val selectedEngine by viewModel.selectedSearchEngine.collectAsStateWithLifecycle()
+                    val isExpanded by viewModel.isEnginePickerExpanded.collectAsStateWithLifecycle()
                     HomePage(
+                        selectedEngine = selectedEngine,
+                        isEnginePickerExpanded = isExpanded,
+                        onEngineSelected = { viewModel.selectSearchEngine(it) },
+                        onExpandPicker = { viewModel.setEnginePickerExpanded(it) },
                         onSearch = { viewModel.navigateTo(it) },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -854,16 +868,93 @@ fun GroupCard(group: TabGroup, tabs: List<BrowserTabState>, onClick: () -> Unit)
 fun Float.pxToDp() = with(androidx.compose.ui.platform.LocalDensity.current) { this@pxToDp.toDp() }
 
 @Composable
-fun HomePage(onSearch: (String) -> Unit, modifier: Modifier = Modifier) {
+fun SearchEngineIcon(engine: SearchEngine, modifier: Modifier = Modifier) {
+    when (engine) {
+        SearchEngine.GOOGLE -> {
+            Box(
+                modifier = modifier
+                    .size(24.dp)
+                    .background(Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "G",
+                    color = Color(0xFF4285F4),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        }
+        SearchEngine.BING -> {
+            Box(
+                modifier = modifier
+                    .size(24.dp)
+                    .background(Color(0xFF008373), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "b",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        }
+        SearchEngine.DUCKDUCKGO -> {
+            Box(
+                modifier = modifier
+                    .size(24.dp)
+                    .background(Color(0xFFDE5833), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "D",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun HomePage(
+    selectedEngine: SearchEngine,
+    isEnginePickerExpanded: Boolean,
+    onEngineSelected: (SearchEngine) -> Unit,
+    onExpandPicker: (Boolean) -> Unit,
+    onSearch: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val scrollState = rememberScrollState()
     Column(modifier = modifier.verticalScroll(scrollState).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(modifier = Modifier.height(48.dp))
-        Text(text = "Google", style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground))
+        Text(
+            text = selectedEngine.displayName,
+            style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        )
         Spacer(modifier = Modifier.height(32.dp))
         var searchText by remember { mutableStateOf("") }
         Surface(modifier = Modifier.fillMaxWidth().height(56.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, tonalElevation = 2.dp) {
-            Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box {
+                    IconButton(onClick = { onExpandPicker(true) }) {
+                        SearchEngineIcon(selectedEngine)
+                    }
+                    DropdownMenu(
+                        expanded = isEnginePickerExpanded,
+                        onDismissRequest = { onExpandPicker(false) }
+                    ) {
+                        SearchEngine.entries.forEach { engine ->
+                            DropdownMenuItem(
+                                text = { Text(engine.displayName) },
+                                leadingIcon = { SearchEngineIcon(engine, modifier = Modifier.size(20.dp)) },
+                                onClick = { onEngineSelected(engine) }
+                            )
+                        }
+                    }
+                }
                 BasicTextField(
                     value = searchText,
                     onValueChange = { searchText = it },
