@@ -13,6 +13,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 class SearchPreferencesRepository(private val context: Context) {
     private val SEARCH_ENGINE_KEY = stringPreferencesKey("search_engine")
+    private val ADDRESS_BAR_POSITION_KEY = stringPreferencesKey("address_bar_position")
 
     val selectedSearchEngine: Flow<SearchEngine> = context.dataStore.data
         .map { preferences ->
@@ -24,9 +25,25 @@ class SearchPreferencesRepository(private val context: Context) {
             }
         }
 
+    val addressBarPosition: Flow<AddressBarPosition> = context.dataStore.data
+        .map { preferences ->
+            val positionName = preferences[ADDRESS_BAR_POSITION_KEY] ?: AddressBarPosition.TOP.name
+            try {
+                AddressBarPosition.valueOf(positionName)
+            } catch (e: IllegalArgumentException) {
+                AddressBarPosition.TOP
+            }
+        }
+
     suspend fun saveSearchEngine(searchEngine: SearchEngine) {
         context.dataStore.edit { preferences ->
             preferences[SEARCH_ENGINE_KEY] = searchEngine.name
+        }
+    }
+
+    suspend fun saveAddressBarPosition(position: AddressBarPosition) {
+        context.dataStore.edit { preferences ->
+            preferences[ADDRESS_BAR_POSITION_KEY] = position.name
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
+import com.example.surfer.data.AddressBarPosition
 import com.example.surfer.data.BookmarkEntity
 import com.example.surfer.data.BrowserDatabase
 import com.example.surfer.data.BrowserRepository
@@ -465,6 +466,9 @@ class BrowserViewModel(
     val selectedSearchEngine: StateFlow<SearchEngine> = searchPreferencesRepository.selectedSearchEngine
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchEngine.GOOGLE)
 
+    val addressBarPosition: StateFlow<AddressBarPosition> = searchPreferencesRepository.addressBarPosition
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AddressBarPosition.TOP)
+
     fun setEnginePickerExpanded(expanded: Boolean) {
         _isEnginePickerExpanded.value = expanded
     }
@@ -473,6 +477,12 @@ class BrowserViewModel(
         viewModelScope.launch {
             searchPreferencesRepository.saveSearchEngine(engine)
             _isEnginePickerExpanded.value = false
+        }
+    }
+
+    fun setAddressBarPosition(position: AddressBarPosition) {
+        viewModelScope.launch {
+            searchPreferencesRepository.saveAddressBarPosition(position)
         }
     }
 

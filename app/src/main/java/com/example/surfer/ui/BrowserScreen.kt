@@ -60,6 +60,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.surfer.data.SearchEngine
+import com.example.surfer.data.AddressBarPosition
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.window.core.layout.WindowWidthSizeClass
 import androidx.compose.foundation.clickable
@@ -96,6 +97,7 @@ fun BrowserScreen(
     onEditBookmark: (String) -> Unit,
     onNavigateToDownloads: () -> Unit,
     onNavigateToRss: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val browserState by viewModel.state.collectAsState()
@@ -107,6 +109,7 @@ fun BrowserScreen(
     val history by viewModel.history.collectAsState()
     val bookmarks by viewModel.bookmarks.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
+    val addressBarPosition by viewModel.addressBarPosition.collectAsStateWithLifecycle()
 
     val adaptiveInfo = currentWindowAdaptiveInfo()
     val isExpanded = adaptiveInfo.windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.EXPANDED
@@ -149,6 +152,250 @@ fun BrowserScreen(
         webView?.goBack()
     }
 
+    val addressBar = @Composable {
+        Column(modifier = Modifier.statusBarsPadding()) {
+            TopAppBar(
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Home button
+                        IconButton(onClick = { viewModel.goHome() }) {
+                            Icon(Icons.Rounded.Home, contentDescription = "Home")
+                        }
+
+                        // Pill-shaped Omnibox
+                        Surface(
+                            color = if (currentTab.isIncognito) Color(0xFF202124) else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                // The actual text field isolated for correct scrolling
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    BasicTextField(
+                                        value = textFieldValue,
+                                        onValueChange = { textFieldValue = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                            color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        ),
+                                        keyboardOptions = KeyboardOptions(
+                                            imeAction = ImeAction.Go,
+                                            keyboardType = KeyboardType.Uri,
+                                            autoCorrect = false
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onGo = {
+                                                viewModel.navigateTo(textFieldValue.text)
+                                                focusManager.clearFocus()
+                                            }
+                                        ),
+                                        cursorBrush = SolidColor(if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary),
+                                        decorationBox = { innerTextField ->
+                                            if (textFieldValue.text.isEmpty()) {
+                                                Text(
+                                                    "Search or type URL",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = if (currentTab.isIncognito) Color.Gray else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    )
+                                }
+
+                                if (isLoading) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+
+                        // New Tab button
+                        IconButton(onClick = { viewModel.addNewTab(isIncognito = currentTab.isIncognito) }) {
+                            Icon(Icons.Rounded.Add, contentDescription = "New Tab")
+                        }
+
+                        // Tab Count button
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .clickable { showTabSwitcher = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .border(1.5.dp, MaterialTheme.colorScheme.onSurface, MaterialTheme.shapes.extraSmall),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = tabs.size.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // Menu button
+                        Box {
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(Icons.Rounded.MoreVert, contentDescription = "Menu")
+                            }
+                            
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                                modifier = Modifier.width(280.dp)
+                            ) {
+                                // Top Row of Icons
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(onClick = { webView?.goForward(); showMenu = false }, enabled = currentTab.canGoForward) {
+                                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Forward")
+                                    }
+                                    IconButton(onClick = { viewModel.toggleBookmark(); showMenu = false }) {
+                                        Icon(
+                                            if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                            contentDescription = "Bookmark",
+                                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    val context = androidx.compose.ui.platform.LocalContext.current
+                                    IconButton(onClick = { 
+                                        webView?.evaluateJavascript("(function() { return document.documentElement.outerHTML; })();") { html ->
+                                            val cleanedHtml = if (html != null && html.startsWith("\"") && html.endsWith("\"")) {
+                                                html.substring(1, html.length - 1)
+                                                    .replace("\\u003C", "<")
+                                                    .replace("\\\"", "\"")
+                                                    .replace("\\\\", "\\")
+                                            } else html ?: ""
+                                            viewModel.saveHtml(currentTab.title, cleanedHtml, context)
+                                            viewModel.showSnackbar("Downloaded")
+                                        }
+                                        showMenu = false 
+                                    }) {
+                                        Icon(Icons.Rounded.Download, contentDescription = "Download as HTML")
+                                    }
+                                    IconButton(onClick = { showPageInfo = true; showMenu = false }) {
+                                        Icon(Icons.Rounded.Info, contentDescription = "Page Info")
+                                    }
+                                    IconButton(onClick = { webView?.reload(); showMenu = false }) {
+                                        Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
+                                    }
+                                }
+                                
+                                HorizontalDivider()
+                                
+                                DropdownMenuItem(
+                                    text = { Text("New Tab") },
+                                    onClick = {
+                                        viewModel.addNewTab()
+                                        showMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("New Incognito Tab") },
+                                    onClick = {
+                                        viewModel.addNewIncognitoTab()
+                                        showMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.PrivacyTip, contentDescription = null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Add tab to group") },
+                                    onClick = {
+                                        showTabSwitcher = true
+                                        showMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.Layers, contentDescription = null) }
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("History") },
+                                    onClick = {
+                                        historyBookmarksMode = 1
+                                        showMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Bookmarks") },
+                                    onClick = {
+                                        historyBookmarksMode = 0
+                                        showMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Downloads") },
+                                    onClick = {
+                                        onNavigateToDownloads()
+                                        showMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.Download, contentDescription = null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("RSS Feeds") },
+                                    onClick = {
+                                        onNavigateToRss()
+                                        showMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.RssFeed, contentDescription = null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Settings") },
+                                    onClick = {
+                                        onNavigateToSettings()
+                                        showMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) }
+                                )
+                            }
+                        }
+                    }
+                }
+            )
+            
+            if (isLoading) {
+                LinearProgressIndicator(
+                    progress = { progress / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+            }
+        }
+    }
+
     NavigationSuiteScaffold(
         layoutType = if (isExpanded) NavigationSuiteType.NavigationRail else NavigationSuiteType.None,
         navigationSuiteItems = {
@@ -187,239 +434,13 @@ fun BrowserScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             topBar = {
-                Column(modifier = Modifier.statusBarsPadding()) {
-                    TopAppBar(
-                        windowInsets = WindowInsets(0, 0, 0, 0),
-                        title = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                // Home button
-                                IconButton(onClick = { viewModel.goHome() }) {
-                                    Icon(Icons.Rounded.Home, contentDescription = "Home")
-                                }
-
-                                // Pill-shaped Omnibox
-                                Surface(
-                                    color = if (currentTab.isIncognito) Color(0xFF202124) else MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = CircleShape,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(40.dp)
-                                        .padding(horizontal = 4.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 12.dp)
-                                    ) {
-                                        // The actual text field isolated for correct scrolling
-                                        Box(
-                                            modifier = Modifier.weight(1f),
-                                            contentAlignment = Alignment.CenterStart
-                                        ) {
-                                            BasicTextField(
-                                                value = textFieldValue,
-                                                onValueChange = { textFieldValue = it },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                singleLine = true,
-                                                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                                    color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                                                ),
-                                                keyboardOptions = KeyboardOptions(
-                                                    imeAction = ImeAction.Go,
-                                                    keyboardType = KeyboardType.Uri,
-                                                    autoCorrect = false
-                                                ),
-                                                keyboardActions = KeyboardActions(
-                                                    onGo = {
-                                                        viewModel.navigateTo(textFieldValue.text)
-                                                        focusManager.clearFocus()
-                                                    }
-                                                ),
-                                                cursorBrush = SolidColor(if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary),
-                                                decorationBox = { innerTextField ->
-                                                    if (textFieldValue.text.isEmpty()) {
-                                                        Text(
-                                                            "Search or type URL",
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            color = if (currentTab.isIncognito) Color.Gray else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                    }
-                                                    innerTextField()
-                                                }
-                                            )
-                                        }
-
-                                        if (isLoading) {
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
-                                                color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // New Tab button
-                                IconButton(onClick = { viewModel.addNewTab(isIncognito = currentTab.isIncognito) }) {
-                                    Icon(Icons.Rounded.Add, contentDescription = "New Tab")
-                                }
-
-                                // Tab Count button
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(CircleShape)
-                                        .clickable { showTabSwitcher = true },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .border(1.5.dp, MaterialTheme.colorScheme.onSurface, MaterialTheme.shapes.extraSmall),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = tabs.size.toString(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-
-                                // Menu button
-                                Box {
-                                    IconButton(onClick = { showMenu = true }) {
-                                        Icon(Icons.Rounded.MoreVert, contentDescription = "Menu")
-                                    }
-                                    
-                                    DropdownMenu(
-                                        expanded = showMenu,
-                                        onDismissRequest = { showMenu = false },
-                                        modifier = Modifier.width(280.dp)
-                                    ) {
-                                        // Top Row of Icons
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            IconButton(onClick = { webView?.goForward(); showMenu = false }, enabled = currentTab.canGoForward) {
-                                                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Forward")
-                                            }
-                                            IconButton(onClick = { viewModel.toggleBookmark(); showMenu = false }) {
-                                                Icon(
-                                                    if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                                                    contentDescription = "Bookmark",
-                                                    tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                                            val context = androidx.compose.ui.platform.LocalContext.current
-                                            IconButton(onClick = { 
-                                                webView?.evaluateJavascript("(function() { return document.documentElement.outerHTML; })();") { html ->
-                                                    val cleanedHtml = if (html != null && html.startsWith("\"") && html.endsWith("\"")) {
-                                                        html.substring(1, html.length - 1)
-                                                            .replace("\\u003C", "<")
-                                                            .replace("\\\"", "\"")
-                                                            .replace("\\\\", "\\")
-                                                    } else html ?: ""
-                                                    viewModel.saveHtml(currentTab.title, cleanedHtml, context)
-                                                    viewModel.showSnackbar("Downloaded")
-                                                }
-                                                showMenu = false 
-                                            }) {
-                                                Icon(Icons.Rounded.Download, contentDescription = "Download as HTML")
-                                            }
-                                            IconButton(onClick = { showPageInfo = true; showMenu = false }) {
-                                                Icon(Icons.Rounded.Info, contentDescription = "Page Info")
-                                            }
-                                            IconButton(onClick = { webView?.reload(); showMenu = false }) {
-                                                Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
-                                            }
-                                        }
-                                        
-                                        HorizontalDivider()
-                                        
-                                        DropdownMenuItem(
-                                            text = { Text("New Tab") },
-                                            onClick = {
-                                                viewModel.addNewTab()
-                                                showMenu = false
-                                            },
-                                            leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("New Incognito Tab") },
-                                            onClick = {
-                                                viewModel.addNewIncognitoTab()
-                                                showMenu = false
-                                            },
-                                            leadingIcon = { Icon(Icons.Rounded.PrivacyTip, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Add tab to group") },
-                                            onClick = {
-                                                showTabSwitcher = true
-                                                showMenu = false
-                                            },
-                                            leadingIcon = { Icon(Icons.Rounded.Layers, contentDescription = null) }
-                                        )
-                                        HorizontalDivider()
-                                        DropdownMenuItem(
-                                            text = { Text("History") },
-                                            onClick = {
-                                                historyBookmarksMode = 1
-                                                showMenu = false
-                                            },
-                                            leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Bookmarks") },
-                                            onClick = {
-                                                historyBookmarksMode = 0
-                                                showMenu = false
-                                            },
-                                            leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Downloads") },
-                                            onClick = {
-                                                onNavigateToDownloads()
-                                                showMenu = false
-                                            },
-                                            leadingIcon = { Icon(Icons.Rounded.Download, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("RSS Feeds") },
-                                            onClick = {
-                                                onNavigateToRss()
-                                                showMenu = false
-                                            },
-                                            leadingIcon = { Icon(Icons.Rounded.RssFeed, contentDescription = null) }
-                                        )
-                                    }
-                                }
-                            }
-                        },
-                        actions = {}
-                    )
-                    
-                    if (isLoading) {
-                        LinearProgressIndicator(
-                            progress = { progress / 100f },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        )
-                    }
+                if (!currentTab.isHomePage && addressBarPosition == AddressBarPosition.TOP) {
+                    addressBar()
+                }
+            },
+            bottomBar = {
+                if (!currentTab.isHomePage && addressBarPosition == AddressBarPosition.BOTTOM) {
+                    addressBar()
                 }
             }
         ) { padding ->
@@ -430,7 +451,6 @@ fun BrowserScreen(
             ) {
                 if (currentTab.isHomePage) {
                     val selectedEngine by viewModel.selectedSearchEngine.collectAsStateWithLifecycle()
-                    val isExpanded by viewModel.isEnginePickerExpanded.collectAsStateWithLifecycle()
                     val rssViewModel: RssViewModel = viewModel()
                     val feeds by rssViewModel.feeds.collectAsStateWithLifecycle()
                     
@@ -445,9 +465,6 @@ fun BrowserScreen(
 
                     HomePage(
                         selectedEngine = selectedEngine,
-                        isEnginePickerExpanded = isExpanded,
-                        onEngineSelected = { viewModel.selectSearchEngine(it) },
-                        onExpandPicker = { viewModel.setEnginePickerExpanded(it) },
                         onSearch = { viewModel.navigateTo(it) },
                         newsItems = newsItems,
                         onNewsItemClick = { viewModel.navigateTo(it) },
@@ -915,6 +932,21 @@ fun SearchEngineIcon(engine: SearchEngine, modifier: Modifier = Modifier) {
                 )
             }
         }
+        SearchEngine.YAHOO_INDIA -> {
+            Box(
+                modifier = modifier
+                    .size(24.dp)
+                    .background(Color(0xFF6001D2), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Y",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        }
         SearchEngine.BING -> {
             Box(
                 modifier = modifier
@@ -924,6 +956,21 @@ fun SearchEngineIcon(engine: SearchEngine, modifier: Modifier = Modifier) {
             ) {
                 Text(
                     text = "b",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        }
+        SearchEngine.YANDEX -> {
+            Box(
+                modifier = modifier
+                    .size(24.dp)
+                    .background(Color(0xFFFF0000), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Y",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
@@ -951,9 +998,6 @@ fun SearchEngineIcon(engine: SearchEngine, modifier: Modifier = Modifier) {
 @Composable
 fun HomePage(
     selectedEngine: SearchEngine,
-    isEnginePickerExpanded: Boolean,
-    onEngineSelected: (SearchEngine) -> Unit,
-    onExpandPicker: (Boolean) -> Unit,
     onSearch: (String) -> Unit,
     newsItems: List<RssItem>,
     onNewsItemClick: (String) -> Unit,
@@ -970,23 +1014,6 @@ fun HomePage(
         var searchText by remember { mutableStateOf("") }
         Surface(modifier = Modifier.fillMaxWidth().height(56.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, tonalElevation = 2.dp) {
             Row(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box {
-                    IconButton(onClick = { onExpandPicker(true) }) {
-                        SearchEngineIcon(selectedEngine)
-                    }
-                    DropdownMenu(
-                        expanded = isEnginePickerExpanded,
-                        onDismissRequest = { onExpandPicker(false) }
-                    ) {
-                        SearchEngine.entries.forEach { engine ->
-                            DropdownMenuItem(
-                                text = { Text(engine.displayName) },
-                                leadingIcon = { SearchEngineIcon(engine, modifier = Modifier.size(20.dp)) },
-                                onClick = { onEngineSelected(engine) }
-                            )
-                        }
-                    }
-                }
                 BasicTextField(
                     value = searchText,
                     onValueChange = { searchText = it },
@@ -996,7 +1023,16 @@ fun HomePage(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { onSearch(searchText) }),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { it() }
+                    decorationBox = { innerTextField ->
+                        if (searchText.isEmpty()) {
+                            Text(
+                                "Search or type URL",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                        innerTextField()
+                    }
                 )
             }
         }

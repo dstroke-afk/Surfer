@@ -18,3 +18,6 @@ object DownloadsRoute : NavKey
 @Serializable
 object RssRoute : NavKey
 
+@Serializable
+object SettingsRoute : NavKey
+

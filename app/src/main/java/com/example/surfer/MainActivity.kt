@@ -24,6 +24,7 @@ import com.example.surfer.navigation.DownloadsRoute
 import com.example.surfer.navigation.EditBookmarkRoute
 import com.example.surfer.navigation.FolderSelectionRoute
 import com.example.surfer.navigation.RssRoute
+import com.example.surfer.navigation.SettingsRoute
 import com.example.surfer.ui.*
 import com.example.surfer.ui.theme.SurferTheme
 
@@ -101,6 +102,9 @@ fun MainApp(intent: Intent?) {
                         },
                         onNavigateToRss = {
                             backStack.add(RssRoute)
+                        },
+                        onNavigateToSettings = {
+                            backStack.add(SettingsRoute)
                         }
                     )
                 }
@@ -139,6 +143,12 @@ fun MainApp(intent: Intent?) {
                         onBack = { backStack.removeLastOrNull() }
                     )
                 }
+                is SettingsRoute -> NavEntry<NavKey>(key) {
+                    SettingsScreen(
+                        viewModel = viewModel,
+                        onBack = { backStack.removeLastOrNull() }
+                    )
+                }
                 else -> NavEntry<NavKey>(BrowserRoute) {
                     BrowserScreen(
                         viewModel = viewModel,
@@ -150,6 +160,9 @@ fun MainApp(intent: Intent?) {
                         },
                         onNavigateToRss = {
                             backStack.add(RssRoute)
+                        },
+                        onNavigateToSettings = {
+                            backStack.add(SettingsRoute)
                         }
                     )
                 }
