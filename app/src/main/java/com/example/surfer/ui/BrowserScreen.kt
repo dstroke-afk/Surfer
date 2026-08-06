@@ -153,83 +153,90 @@ fun BrowserScreen(
     }
 
     val addressBar = @Composable {
-        Column(modifier = Modifier.statusBarsPadding()) {
+        Column(modifier = if (addressBarPosition == AddressBarPosition.TOP) Modifier.statusBarsPadding() else Modifier) {
             TopAppBar(
                 windowInsets = WindowInsets(0, 0, 0, 0),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (currentTab.isHomePage) Color.Transparent else MaterialTheme.colorScheme.surface
+                ),
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Home button
-                        IconButton(onClick = { viewModel.goHome() }) {
-                            Icon(Icons.Rounded.Home, contentDescription = "Home")
-                        }
+                        if (!currentTab.isHomePage) {
+                            // Home button
+                            IconButton(onClick = { viewModel.goHome() }) {
+                                Icon(Icons.Rounded.Home, contentDescription = "Home")
+                            }
 
-                        // Pill-shaped Omnibox
-                        Surface(
-                            color = if (currentTab.isIncognito) Color(0xFF202124) else MaterialTheme.colorScheme.surfaceVariant,
-                            shape = CircleShape,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                                .padding(horizontal = 4.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
+                            // Pill-shaped Omnibox
+                            Surface(
+                                color = if (currentTab.isIncognito) Color(0xFF202124) else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = CircleShape,
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 12.dp)
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .padding(horizontal = 4.dp)
                             ) {
-                                // The actual text field isolated for correct scrolling
-                                Box(
-                                    modifier = Modifier.weight(1f),
-                                    contentAlignment = Alignment.CenterStart
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 12.dp)
                                 ) {
-                                    BasicTextField(
-                                        value = textFieldValue,
-                                        onValueChange = { textFieldValue = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true,
-                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                            color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                                        ),
-                                        keyboardOptions = KeyboardOptions(
-                                            imeAction = ImeAction.Go,
-                                            keyboardType = KeyboardType.Uri,
-                                            autoCorrect = false
-                                        ),
-                                        keyboardActions = KeyboardActions(
-                                            onGo = {
-                                                viewModel.navigateTo(textFieldValue.text)
-                                                focusManager.clearFocus()
+                                    // The actual text field isolated for correct scrolling
+                                    Box(
+                                        modifier = Modifier.weight(1f),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        BasicTextField(
+                                            value = textFieldValue,
+                                            onValueChange = { textFieldValue = it },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = true,
+                                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                                color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            ),
+                                            keyboardOptions = KeyboardOptions(
+                                                imeAction = ImeAction.Go,
+                                                keyboardType = KeyboardType.Uri,
+                                                autoCorrect = false
+                                            ),
+                                            keyboardActions = KeyboardActions(
+                                                onGo = {
+                                                    viewModel.navigateTo(textFieldValue.text)
+                                                    focusManager.clearFocus()
+                                                }
+                                            ),
+                                            cursorBrush = SolidColor(if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary),
+                                            decorationBox = { innerTextField ->
+                                                if (textFieldValue.text.isEmpty()) {
+                                                    Text(
+                                                        "Search or type URL",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = if (currentTab.isIncognito) Color.Gray else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                innerTextField()
                                             }
-                                        ),
-                                        cursorBrush = SolidColor(if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary),
-                                        decorationBox = { innerTextField ->
-                                            if (textFieldValue.text.isEmpty()) {
-                                                Text(
-                                                    "Search or type URL",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = if (currentTab.isIncognito) Color.Gray else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                            innerTextField()
-                                        }
-                                    )
-                                }
+                                        )
+                                    }
 
-                                if (isLoading) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
-                                        color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary
-                                    )
+                                    if (isLoading) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = if (currentTab.isIncognito) Color.White else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
                             }
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
 
                         // New Tab button
@@ -385,7 +392,7 @@ fun BrowserScreen(
                 }
             )
             
-            if (isLoading) {
+            if (!currentTab.isHomePage && isLoading) {
                 LinearProgressIndicator(
                     progress = { progress / 100f },
                     modifier = Modifier.fillMaxWidth(),
@@ -434,12 +441,12 @@ fun BrowserScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             topBar = {
-                if (!currentTab.isHomePage && addressBarPosition == AddressBarPosition.TOP) {
+                if (addressBarPosition == AddressBarPosition.TOP) {
                     addressBar()
                 }
             },
             bottomBar = {
-                if (!currentTab.isHomePage && addressBarPosition == AddressBarPosition.BOTTOM) {
+                if (addressBarPosition == AddressBarPosition.BOTTOM) {
                     addressBar()
                 }
             }
@@ -1005,7 +1012,7 @@ fun HomePage(
 ) {
     val scrollState = rememberScrollState()
     Column(modifier = modifier.verticalScroll(scrollState).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = selectedEngine.displayName,
             style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
